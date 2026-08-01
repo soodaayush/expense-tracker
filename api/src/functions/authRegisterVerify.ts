@@ -9,7 +9,7 @@ import {
   verifySessionCookie,
 } from "../lib/session";
 import { createCredential, listCredentials } from "../lib/tables";
-import { verifyRegistration } from "../lib/webauthn";
+import { isLocalDev, verifyRegistration } from "../lib/webauthn";
 import { withErrors } from "../middleware/withAuth";
 
 interface VerifyBody {
@@ -28,8 +28,10 @@ app.http("authRegisterVerify", {
     const isBootstrap = existing.length === 0;
 
     if (isBootstrap) {
-      const expected = process.env.SETUP_TOKEN;
-      if (!expected || body.setupToken !== expected) throw new HttpError(403, "invalid_setup_token");
+      if (!isLocalDev()) {
+        const expected = process.env.SETUP_TOKEN;
+        if (!expected || body.setupToken !== expected) throw new HttpError(403, "invalid_setup_token");
+      }
     } else {
       const session = await verifySessionCookie(request);
       if (!session) throw new HttpError(401, "unauthorized");

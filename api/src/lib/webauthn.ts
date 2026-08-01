@@ -29,6 +29,10 @@ export function origin(): string {
   return value;
 }
 
+export function isLocalDev(): boolean {
+  return rpID() === "localhost";
+}
+
 export async function buildRegistrationOptions(
   existingCredentials: CredentialRecord[]
 ): Promise<PublicKeyCredentialCreationOptionsJSON> {

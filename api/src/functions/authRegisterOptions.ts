@@ -3,11 +3,12 @@ import { HttpError } from "../lib/errors";
 import { withCookies } from "../lib/http";
 import { createChallengeCookie, verifySessionCookie } from "../lib/session";
 import { listCredentials } from "../lib/tables";
-import { buildRegistrationOptions } from "../lib/webauthn";
+import { buildRegistrationOptions, isLocalDev } from "../lib/webauthn";
 import { withErrors } from "../middleware/withAuth";
 
 async function requireBootstrapOrSession(request: HttpRequest, existingCount: number): Promise<void> {
   if (existingCount === 0) {
+    if (isLocalDev()) return;
     const body = (await request.json().catch(() => ({}))) as { setupToken?: string };
     const expected = process.env.SETUP_TOKEN;
     if (!expected || body.setupToken !== expected) {

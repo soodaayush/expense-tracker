@@ -7,6 +7,8 @@ export default function LoginPage() {
   const { authenticated, isLoading, refresh } = useSession();
   const navigate = useNavigate();
 
+  const isLocalDev = window.location.hostname === "localhost";
+
   const [showSetup, setShowSetup] = useState(false);
   const [setupToken, setSetupToken] = useState("");
   const [deviceLabel, setDeviceLabel] = useState("");
@@ -61,15 +63,17 @@ export default function LoginPage() {
 
         {showSetup && (
           <div className="auth-setup">
-            <label>
-              Setup token
-              <input
-                type="password"
-                value={setupToken}
-                onChange={(e) => setSetupToken(e.target.value)}
-                placeholder="Value of SETUP_TOKEN"
-              />
-            </label>
+            {!isLocalDev && (
+              <label>
+                Setup token
+                <input
+                  type="password"
+                  value={setupToken}
+                  onChange={(e) => setSetupToken(e.target.value)}
+                  placeholder="Value of SETUP_TOKEN"
+                />
+              </label>
+            )}
             <label>
               Device name (optional)
               <input
@@ -79,7 +83,11 @@ export default function LoginPage() {
                 placeholder="e.g. Laptop"
               />
             </label>
-            <button className="btn btn-secondary" onClick={handleSetup} disabled={busy || !setupToken}>
+            <button
+              className="btn btn-secondary"
+              onClick={handleSetup}
+              disabled={busy || (!isLocalDev && !setupToken)}
+            >
               Register this device
             </button>
           </div>
