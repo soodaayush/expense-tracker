@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"console.log\\(require\\('@simplewebauthn/server/package.json'\\).version\\)\")",
+      "Bash(npm run *)",
+      "Bash(npx func *)",
+      "Bash(break)",
+      "Bash(node \"C:\\\\Users\\\\aayus\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-aayus-Development-expense-tracking-app\\\\2dcd925d-7f1b-4693-9432-4257c3199b79\\\\scratchpad\\\\verify-lib.mjs\")",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\aayus\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-aayus-Development-expense-tracking-app\\\\2dcd925d-7f1b-4693-9432-4257c3199b79\\\\scratchpad\\\\cleanup.mjs\")",
+      "Bash(powershell -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*azurite*'\\\\'' } | Select-Object ProcessId, CommandLine')",
+      "Bash(powershell -Command 'Stop-Process -Id 35056,28044 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-CimInstance Win32_Process -Filter \"Name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*azurite*'\\\\'' } | Measure-Object | Select-Object Count')",
+      "Bash(where nvm *)",
+      "Bash(nvm version *)",
+      "PowerShell(& \"C:\\\\Users\\\\aayus\\\\AppData\\\\Local\\\\nvm\\\\nvm.exe\" install 20)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "PowerShell(& \"C:\\\\nvm4w\\\\nodejs\\\\node.exe\" --version)",
+      "PowerShell(& \"C:\\\\nvm4w\\\\nodejs\\\\npm.cmd\" --version)",
+      "Bash(grep -n \"openssl\\\\|PowerShell\\\\|\\\\.ps1\\\\|backslash\\\\|\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\" \"c:/Users/aayus/Development/expense-tracking-app/README.md\")"
+    ]
+  }
+}

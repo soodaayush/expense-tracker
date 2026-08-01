@@ -1,0 +1,28 @@
+{
+  "name": "bill-tracker-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "prestart": "npm run clean && npm run build",
+    "start": "func start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.0",
+    "@azure/functions": "^4.5.1",
+    "@simplewebauthn/server": "^13.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "azure-functions-core-tools": "^4.0.6821",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4"
+  }
+}
