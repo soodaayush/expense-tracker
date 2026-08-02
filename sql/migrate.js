@@ -38,10 +38,14 @@ async function main() {
 
   console.log(`Ensuring database "${database}" exists on ${server}:${port}...`);
   const masterPool = await sql.connect({ ...baseConfig, database: "master" });
-  await masterPool.request().batch(`
-    IF DB_ID('${database}') IS NULL
-      CREATE DATABASE [${database}];
-  `);
+  try {
+    // Azure SQL Database requires CREATE DATABASE to be the only statement in its batch,
+    // so an `IF DB_ID(...) IS NULL` guard around it isn't reliably enforced there — instead
+    // just attempt creation unconditionally and treat "already exists" as success.
+    await masterPool.request().batch(`CREATE DATABASE [${database}];`);
+  } catch (err) {
+    if (err.number !== 1801) throw err;
+  }
   await masterPool.close();
 
   console.log(`Applying schema to "${database}"...`);
