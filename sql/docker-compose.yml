@@ -1,0 +1,19 @@
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: bill-tracker-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      # NOTE: this env var is MSSQL_SA_PASSWORD on the 2022 image — SA_PASSWORD is deprecated/ignored
+      # and is a common copy-paste trap from older tutorials.
+      MSSQL_SA_PASSWORD: "LocalDev!Passw0rd"
+    ports:
+      # Host port 14330, not 1433 — this machine already has a native SQL Server instance
+      # (Windows service MSSQLSERVER) bound to 1433, which would silently intercept the
+      # connection instead of the container if we reused that port.
+      - "14330:1433"
+    volumes:
+      - bill-tracker-sql-data:/var/opt/mssql
+
+volumes:
+  bill-tracker-sql-data:

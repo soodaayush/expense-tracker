@@ -3,12 +3,21 @@ import { HttpRequest } from "@azure/functions";
 
 const SESSION_COOKIE = "session";
 const CHALLENGE_COOKIE = "pending_challenge";
+const PENDING_SIGNUP_COOKIE = "pending_signup";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const CHALLENGE_MAX_AGE_SECONDS = 60 * 5; // 5 minutes
 
 export interface SessionPayload {
+  userId: string;
+  displayName?: string;
   iat: number;
   exp: number;
+}
+
+export interface PendingSignup {
+  challenge: string;
+  userId: string;
+  displayName?: string;
 }
 
 function secret(): string {
@@ -52,9 +61,9 @@ function cookieHeader(name: string, value: string, maxAgeSeconds: number): strin
   return `${name}=${value}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
 }
 
-export function createSessionCookie(): string {
+export function createSessionCookie(userId: string, displayName?: string): string {
   const now = Math.floor(Date.now() / 1000);
-  const payload: SessionPayload = { iat: now, exp: now + SESSION_MAX_AGE_SECONDS };
+  const payload: SessionPayload = { userId, displayName, iat: now, exp: now + SESSION_MAX_AGE_SECONDS };
   return cookieHeader(SESSION_COOKIE, pack(JSON.stringify(payload)), SESSION_MAX_AGE_SECONDS);
 }
 
@@ -70,6 +79,7 @@ export async function verifySessionCookie(request: HttpRequest): Promise<Session
   try {
     const payload = JSON.parse(raw) as SessionPayload;
     if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    if (typeof payload.userId !== "string" || !payload.userId) return null;
     return payload;
   } catch {
     return null;
@@ -88,4 +98,26 @@ export function readChallengeCookie(request: HttpRequest): string | null {
   const token = readCookie(request, CHALLENGE_COOKIE);
   if (!token) return null;
   return unpack(token);
+}
+
+export function createPendingSignupCookie(pending: PendingSignup): string {
+  return cookieHeader(PENDING_SIGNUP_COOKIE, pack(JSON.stringify(pending)), CHALLENGE_MAX_AGE_SECONDS);
+}
+
+export function clearPendingSignupCookie(): string {
+  return cookieHeader(PENDING_SIGNUP_COOKIE, "", 0);
+}
+
+export function readPendingSignupCookie(request: HttpRequest): PendingSignup | null {
+  const token = readCookie(request, PENDING_SIGNUP_COOKIE);
+  if (!token) return null;
+  const raw = unpack(token);
+  if (!raw) return null;
+  try {
+    const pending = JSON.parse(raw) as PendingSignup;
+    if (!pending.challenge || !pending.userId) return null;
+    return pending;
+  } catch {
+    return null;
+  }
 }

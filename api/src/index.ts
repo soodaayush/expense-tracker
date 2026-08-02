@@ -1,5 +1,7 @@
-import "./functions/authRegisterOptions";
-import "./functions/authRegisterVerify";
+import "./functions/authSignupOptions";
+import "./functions/authSignupVerify";
+import "./functions/authDevicesOptions";
+import "./functions/authDevicesVerify";
 import "./functions/authLoginOptions";
 import "./functions/authLoginVerify";
 import "./functions/authSession";

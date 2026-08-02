@@ -8,6 +8,6 @@ app.http("authSession", {
   authLevel: "anonymous",
   handler: withErrors(async (request) => {
     const session = await verifySessionCookie(request);
-    return { status: 200, jsonBody: { authenticated: !!session } };
+    return { status: 200, jsonBody: { authenticated: !!session, displayName: session?.displayName } };
   }),
 });

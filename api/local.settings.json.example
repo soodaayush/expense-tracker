@@ -3,11 +3,15 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "AZURE_STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true",
+    "SQL_SERVER": "localhost",
+    "SQL_PORT": "14330",
+    "SQL_DATABASE": "BillTracker",
+    "SQL_USER": "sa",
+    "SQL_PASSWORD": "LocalDev!Passw0rd",
+    "SQL_TRUST_SERVER_CERT": "true",
     "RP_ID": "localhost",
     "ORIGIN": "http://localhost:4280",
-    "SESSION_SECRET": "replace-with-any-long-random-string-for-local-dev",
-    "SETUP_TOKEN": "replace-with-any-value-for-local-dev"
+    "SESSION_SECRET": "replace-with-any-long-random-string-for-local-dev"
   },
   "Host": {
     "CORS": "*"

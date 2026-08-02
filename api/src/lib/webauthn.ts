@@ -13,7 +13,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from "@simplewebauthn/server";
-import { CredentialRecord } from "./tables";
+import { CredentialRecord } from "./db";
 
 export const RP_NAME = "Bill Tracker";
 
@@ -29,24 +29,24 @@ export function origin(): string {
   return value;
 }
 
-export function isLocalDev(): boolean {
-  return rpID() === "localhost";
-}
-
-export async function buildRegistrationOptions(
-  existingCredentials: CredentialRecord[]
-): Promise<PublicKeyCredentialCreationOptionsJSON> {
+export async function buildRegistrationOptions(opts: {
+  userId: string;
+  displayName?: string;
+  excludeCredentials: CredentialRecord[];
+}): Promise<PublicKeyCredentialCreationOptionsJSON> {
+  const name = opts.displayName?.trim() || "Bill Tracker account";
   return generateRegistrationOptions({
     rpName: RP_NAME,
     rpID: rpID(),
-    userName: "owner",
-    userDisplayName: "Bill Tracker",
+    userID: new TextEncoder().encode(opts.userId),
+    userName: name,
+    userDisplayName: name,
     attestationType: "none",
     authenticatorSelection: {
       residentKey: "required",
       userVerification: "preferred",
     },
-    excludeCredentials: existingCredentials.map((cred) => ({
+    excludeCredentials: opts.excludeCredentials.map((cred) => ({
       id: cred.credentialId,
       transports: cred.transports as AuthenticatorTransportFuture[] | undefined,
     })),

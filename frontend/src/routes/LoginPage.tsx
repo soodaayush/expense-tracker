@@ -1,17 +1,14 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { loginWithPasskey, registerPasskey } from "../api/auth";
+import { loginWithPasskey, signup } from "../api/auth";
 import { useSession } from "../hooks/useSession";
 
 export default function LoginPage() {
   const { authenticated, isLoading, refresh } = useSession();
   const navigate = useNavigate();
 
-  const isLocalDev = window.location.hostname === "localhost";
-
-  const [showSetup, setShowSetup] = useState(false);
-  const [setupToken, setSetupToken] = useState("");
-  const [deviceLabel, setDeviceLabel] = useState("");
+  const [showSignup, setShowSignup] = useState(false);
+  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,15 +28,15 @@ export default function LoginPage() {
     }
   }
 
-  async function handleSetup() {
+  async function handleSignup() {
     setError(null);
     setBusy(true);
     try {
-      await registerPasskey({ setupToken, deviceLabel: deviceLabel || undefined });
+      await signup({ displayName: displayName || undefined });
       await refresh();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Setup failed");
+      setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setBusy(false);
     }
@@ -57,38 +54,23 @@ export default function LoginPage() {
 
         {error && <p className="auth-error">{error}</p>}
 
-        <button className="btn-link" onClick={() => setShowSetup((v) => !v)} type="button">
-          {showSetup ? "Hide first-time setup" : "First time here? Set up a passkey"}
+        <button className="btn-link" onClick={() => setShowSignup((v) => !v)} type="button">
+          {showSignup ? "Hide sign up" : "New here? Create an account"}
         </button>
 
-        {showSetup && (
+        {showSignup && (
           <div className="auth-setup">
-            {!isLocalDev && (
-              <label>
-                Setup token
-                <input
-                  type="password"
-                  value={setupToken}
-                  onChange={(e) => setSetupToken(e.target.value)}
-                  placeholder="Value of SETUP_TOKEN"
-                />
-              </label>
-            )}
             <label>
-              Device name (optional)
+              Name this account (optional)
               <input
                 type="text"
-                value={deviceLabel}
-                onChange={(e) => setDeviceLabel(e.target.value)}
-                placeholder="e.g. Laptop"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="e.g. Personal, or your name"
               />
             </label>
-            <button
-              className="btn btn-secondary"
-              onClick={handleSetup}
-              disabled={busy || (!isLocalDev && !setupToken)}
-            >
-              Register this device
+            <button className="btn btn-secondary" onClick={handleSignup} disabled={busy}>
+              Create account with a passkey
             </button>
           </div>
         )}

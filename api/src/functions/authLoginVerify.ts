@@ -3,7 +3,7 @@ import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { HttpError } from "../lib/errors";
 import { withCookies } from "../lib/http";
 import { clearChallengeCookie, createSessionCookie, readChallengeCookie } from "../lib/session";
-import { getCredential, updateCredentialCounter } from "../lib/tables";
+import { getCredential, getUser, updateCredentialCounter } from "../lib/db";
 import { verifyAuthentication } from "../lib/webauthn";
 import { withErrors } from "../middleware/withAuth";
 
@@ -23,15 +23,17 @@ app.http("authLoginVerify", {
 
     const credential = await getCredential(body.response.id);
     if (!credential) throw new HttpError(401, "unknown_credential");
+    if (!credential.userId) throw new HttpError(401, "credential_needs_migration");
 
     const result = await verifyAuthentication(body.response, challenge, credential);
     if (!result.verified) throw new HttpError(401, "authentication_not_verified");
 
     await updateCredentialCounter(credential.credentialId, result.authenticationInfo.newCounter);
+    const user = await getUser(credential.userId);
 
     return withCookies({ status: 200, jsonBody: { verified: true } }, [
       clearChallengeCookie(),
-      createSessionCookie(),
+      createSessionCookie(credential.userId, user?.displayName),
     ]);
   }),
 });

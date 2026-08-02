@@ -2,7 +2,7 @@ import { app } from "@azure/functions";
 import { HttpError } from "../lib/errors";
 import { validateImportRow } from "../lib/csv";
 import { ImportResult } from "../shared/types";
-import { createBill } from "../lib/tables";
+import { createBill } from "../lib/db";
 import { withAuth } from "../middleware/withAuth";
 
 interface ImportBody {
@@ -13,7 +13,7 @@ app.http("billsImport", {
   methods: ["POST"],
   route: "bills/import",
   authLevel: "anonymous",
-  handler: withAuth(async (request) => {
+  handler: withAuth(async (request, _context, session) => {
     const body = (await request.json().catch(() => null)) as ImportBody | null;
     if (!body || !Array.isArray(body.rows)) throw new HttpError(400, "rows must be an array");
 
@@ -26,7 +26,7 @@ app.http("billsImport", {
         continue;
       }
       try {
-        await createBill(validation.row);
+        await createBill(session.userId, validation.row);
         result.inserted++;
       } catch (err) {
         result.errors.push({ rowIndex: i, message: (err as Error).message ?? "insert_failed" });

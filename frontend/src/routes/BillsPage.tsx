@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { logout, registerPasskey } from "../api/auth";
+import { addPasskey, logout } from "../api/auth";
 import BillsGrid from "../components/grid/BillsGrid";
 import TotalsBar from "../components/grid/TotalsBar";
 import { useSession } from "../hooks/useSession";
@@ -8,7 +8,7 @@ import { useBillsQuery } from "../hooks/useBills";
 
 export default function BillsPage() {
   const navigate = useNavigate();
-  const { refresh } = useSession();
+  const { displayName, refresh } = useSession();
   const billsQuery = useBillsQuery();
   const [addingPasskey, setAddingPasskey] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export default function BillsPage() {
     setAddingPasskey(true);
     setMessage(null);
     try {
-      await registerPasskey({ deviceLabel });
+      await addPasskey({ deviceLabel });
       setMessage("Passkey added.");
     } catch (err) {
       setMessage(err instanceof Error ? `Failed: ${err.message}` : "Failed to add passkey");
@@ -36,7 +36,7 @@ export default function BillsPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>Bill Tracker</h1>
+        <h1>Bill Tracker{displayName ? ` — ${displayName}` : ""}</h1>
         <nav className="page-nav">
           <Link to="/import" className="btn-link">
             Import CSV

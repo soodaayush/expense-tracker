@@ -11,6 +11,7 @@ export function useSession() {
 
   return {
     authenticated: query.data?.authenticated ?? false,
+    displayName: query.data?.displayName,
     isLoading: query.isLoading,
     refresh: () => queryClient.invalidateQueries({ queryKey: ["session"] }),
   };

@@ -1,7 +1,7 @@
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { apiFetch } from "./client";
 
-export async function fetchSession(): Promise<{ authenticated: boolean }> {
+export async function fetchSession(): Promise<{ authenticated: boolean; displayName?: string }> {
   return apiFetch("/auth/session");
 }
 
@@ -9,17 +9,30 @@ export async function logout(): Promise<void> {
   await apiFetch("/auth/logout", { method: "POST" });
 }
 
-export async function registerPasskey(opts: { setupToken?: string; deviceLabel?: string }): Promise<void> {
-  const options = await apiFetch<PublicKeyCredentialCreationOptionsJSON>("/auth/register/options", {
+export async function signup(opts: { displayName?: string; deviceLabel?: string }): Promise<void> {
+  const options = await apiFetch<PublicKeyCredentialCreationOptionsJSON>("/auth/signup/options", {
     method: "POST",
-    body: JSON.stringify({ setupToken: opts.setupToken }),
+    body: JSON.stringify({ displayName: opts.displayName }),
   });
 
   const response = await startRegistration({ optionsJSON: options });
 
-  await apiFetch("/auth/register/verify", {
+  await apiFetch("/auth/signup/verify", {
     method: "POST",
-    body: JSON.stringify({ setupToken: opts.setupToken, response, deviceLabel: opts.deviceLabel }),
+    body: JSON.stringify({ response, deviceLabel: opts.deviceLabel }),
+  });
+}
+
+export async function addPasskey(opts: { deviceLabel?: string }): Promise<void> {
+  const options = await apiFetch<PublicKeyCredentialCreationOptionsJSON>("/auth/devices/options", {
+    method: "POST",
+  });
+
+  const response = await startRegistration({ optionsJSON: options });
+
+  await apiFetch("/auth/devices/verify", {
+    method: "POST",
+    body: JSON.stringify({ response, deviceLabel: opts.deviceLabel }),
   });
 }
 
