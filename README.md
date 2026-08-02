@@ -206,6 +206,60 @@ Static Web Apps Free tier: $0 (includes 100GB/month bandwidth + managed function
 - **Accounts have no recovery mechanism.** Since there's no email, losing access to every registered passkey for an account means losing access to that account's data permanently — there's no password reset or account recovery flow. Registering a passkey on more than one device ("Add passkey") is the only mitigation.
 - **The free tier auto-pauses on inactivity** — the first request after a pause can take several seconds to resume. Expected behavior, not a bug; not worth engineering around with a keep-alive ping (that would just burn the free vCore-second allowance for no real benefit).
 
+## Staging environment
+
+For testing changes (schema migrations, new features) without touching production data, run staging as a **second, fully separate Static Web App** connected to a `staging` branch — not SWA's built-in PR/branch preview environments, which share app settings with production and are ephemeral. The two deployments never share config or data.
+
+### 1. Create a second Static Web App
+
+Portal: **Create a resource → Static Web App → Free plan**, connect the same GitHub repo, branch = `staging`, same locations as prod (App `/frontend`, Api `/api`, Output `dist`). This auto-generates a second GitHub Actions workflow file and a second repo secret, the same way the existing prod workflow was created — pushes to `staging` now deploy independently from pushes to `main`.
+
+### 2. Create a second database
+
+Reuse the existing SQL logical server (same admin login, same `AllowAzureServices` firewall rule already covers it) rather than standing up a second server:
+
+```bash
+az sql db create \
+  --resource-group <your-resource-group> \
+  --server <your-existing-sql-server> \
+  --name BillTrackerStaging \
+  --edition GeneralPurpose \
+  --family Gen5 \
+  --capacity 2 \
+  --compute-model Serverless
+```
+
+Note there's no `--use-free-limit` here — Azure only grants the Always-Free allowance to one database per subscription, and the prod database already claims it. A second database is a small real cost (roughly a few dollars a month at low usage), so total spend is no longer strictly $0 once staging exists.
+
+Apply the schema the same way as prod, pointed at the new database:
+
+```bash
+SQL_SERVER=<your-existing-sql-server>.database.windows.net SQL_DATABASE=BillTrackerStaging \
+SQL_USER=<sql-login> SQL_PASSWORD="<same-password-as-prod>" npm run db:migrate
+```
+
+### 3. Set application settings on the staging resource
+
+```bash
+az staticwebapp appsettings set --name <your-staging-app-name> \
+  --setting-names \
+    SQL_SERVER="<your-existing-sql-server>.database.windows.net" \
+    SQL_DATABASE="BillTrackerStaging" \
+    SQL_USER="<sql-login>" \
+    SQL_PASSWORD="<same-password-as-prod>" \
+    SESSION_SECRET="$(openssl rand -base64 32)" \
+    RP_ID="<your-staging-app-name>.azurestaticapps.net" \
+    ORIGIN="https://<your-staging-app-name>.azurestaticapps.net"
+```
+
+`SESSION_SECRET` should be a fresh value, independent from prod's.
+
+**Passkeys don't carry over between environments.** WebAuthn ties every registered passkey to the `RP_ID` it was created under, and staging's `RP_ID` is necessarily different from prod's — so staging gets its own, separate accounts. This is actually what you want (a safe sandbox with test data, isolated from real accounts), just worth knowing going in: signing up on staging doesn't give you access on prod or vice versa.
+
+### 4. Deploy and verify
+
+Push to `staging` to trigger the new workflow. Visit the staging URL, create a test account, and confirm bills you add there land in `BillTrackerStaging`, not the production database.
+
 ## Migrating your existing spreadsheet
 
 Export your Dropbox spreadsheet to CSV, then use the "Import CSV" screen in the app. It expects (and will try to auto-detect) columns for Payee, Amount, Due Date, Paid Date, and Notes — you can remap them manually if your headers differ. Rows with unparseable dates or amounts are flagged and skipped rather than blocking the whole import.
