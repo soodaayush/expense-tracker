@@ -12,7 +12,7 @@ function requireEnv(name) {
   return value;
 }
 
-const DB_NAME_RE = /^[A-Za-z0-9_]+$/;
+const DB_NAME_RE = /^[A-Za-z0-9_-]+$/;
 
 async function main() {
   const server = requireEnv("SQL_SERVER");
