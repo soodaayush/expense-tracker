@@ -1,16 +1,25 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ColumnMapper from "../components/import/ColumnMapper";
 import CsvDropzone from "../components/import/CsvDropzone";
+import ImportPreviewTable from "../components/import/ImportPreviewTable";
 import { IMPORT_CHUNK_SIZE, useImportBills } from "../hooks/useBills";
-import { guessColumnMapping, normalizeRow } from "../lib/csvValidation";
+import { guessColumnMapping, normalizeRow, TargetField } from "../lib/csvValidation";
 import { BillInput } from "../types/bill";
 
-type Step = "upload" | "importing" | "done";
+type Step = "upload" | "map" | "preview" | "importing" | "done";
 
 export default function ImportPage() {
   const [step, setStep] = useState<Step>("upload");
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [skippedCount, setSkippedCount] = useState(0);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);
+  const [mapping, setMapping] = useState<Record<TargetField, string | null>>({
+    payee: null,
+    amount: null,
+    dueDate: null,
+    paidDate: null,
+    notes: null,
+  });
 
   // The rows most recently handed to the mutation and how many of them are already known-attempted
   // from prior tries — lets a retry resend only what's left instead of the whole import.
@@ -19,26 +28,25 @@ export default function ImportPage() {
 
   const importMutation = useImportBills();
 
-  function handleParsed(headers: string[], rawRows: Record<string, string>[]) {
-    const mapping = guessColumnMapping(headers);
-    const validated = rawRows.map((r) => normalizeRow(r, mapping));
-    const validInputs = validated.filter((r) => r.valid).map((r) => r.input);
+  const validatedRows = useMemo(() => rawRows.map((r) => normalizeRow(r, mapping)), [rawRows, mapping]);
 
-    if (validInputs.length === 0) {
-      setUploadError("No valid rows found — check that your CSV has recognizable Payee and Due Date columns.");
-      return;
-    }
-
-    setUploadError(null);
-    setSkippedCount(validated.length - validInputs.length);
-    setImportedBeforeThisAttempt(0);
-    startImport(validInputs);
+  function handleParsed(h: string[], rows: Record<string, string>[]) {
+    setHeaders(h);
+    setRawRows(rows);
+    setMapping(guessColumnMapping(h));
+    setStep("map");
   }
 
   function startImport(rows: BillInput[]) {
     setPendingRows(rows);
     setStep("importing");
     importMutation.mutate(rows, { onSuccess: () => setStep("done") });
+  }
+
+  function handleImport() {
+    const validInputs = validatedRows.filter((r) => r.valid).map((r) => r.input);
+    setImportedBeforeThisAttempt(0);
+    startImport(validInputs);
   }
 
   function handleRetry() {
@@ -59,10 +67,32 @@ export default function ImportPage() {
         </Link>
       </header>
 
-      {step === "upload" && (
+      {step === "upload" && <CsvDropzone onParsed={handleParsed} />}
+
+      {step === "map" && (
         <>
-          <CsvDropzone onParsed={handleParsed} />
-          {uploadError && <p className="auth-error">{uploadError}</p>}
+          <ColumnMapper headers={headers} mapping={mapping} onChange={setMapping} />
+          <button className="btn btn-primary" onClick={() => setStep("preview")}>
+            Preview
+          </button>
+        </>
+      )}
+
+      {step === "preview" && (
+        <>
+          <ImportPreviewTable rows={validatedRows} />
+          <div className="import-actions">
+            <button className="btn-link" onClick={() => setStep("map")}>
+              Back to mapping
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleImport}
+              disabled={importMutation.isPending || !validatedRows.some((r) => r.valid)}
+            >
+              Import {validatedRows.filter((r) => r.valid).length} bills
+            </button>
+          </div>
         </>
       )}
 
@@ -94,9 +124,7 @@ export default function ImportPage() {
         <div>
           <p>
             Imported {importedBeforeThisAttempt + importMutation.data.inserted} bills.{" "}
-            {importMutation.data.errors.length > 0 && `${importMutation.data.errors.length} rows failed. `}
-            {skippedCount > 0 &&
-              `${skippedCount} rows were skipped before import (unrecognized payee, due date, or amount).`}
+            {importMutation.data.errors.length > 0 && `${importMutation.data.errors.length} rows failed.`}
           </p>
           {importMutation.data.errors.length > 0 && (
             <ul>
