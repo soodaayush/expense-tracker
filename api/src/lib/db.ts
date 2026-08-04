@@ -132,6 +132,67 @@ export async function createBill(userId: string, input: BillInput): Promise<Bill
   return toBill(result.recordset[0]);
 }
 
+// Bulk path for CSV import: one bulk-copy round-trip per table instead of one INSERT per row,
+// wrapped in a transaction so a chunk either fully lands or fully rolls back (safe to retry).
+export async function bulkCreateBills(userId: string, rows: BillInput[]): Promise<{ inserted: number }> {
+  if (rows.length === 0) return { inserted: 0 };
+
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    const payeeNames = [...new Set(rows.map((r) => r.payee.trim()).filter(Boolean))];
+    if (payeeNames.length > 0) {
+      const existingRequest = new sql.Request(transaction).input("userId", sql.UniqueIdentifier, userId);
+      payeeNames.forEach((name, i) => existingRequest.input(`p${i}`, sql.NVarChar(400), name));
+      const existing = await existingRequest.query(
+        `SELECT name FROM dbo.Payees WHERE user_id = @userId AND name IN (${payeeNames
+          .map((_, i) => `@p${i}`)
+          .join(", ")})`
+      );
+      const existingNames = new Set(existing.recordset.map((r) => r.name as string));
+      const newPayeeNames = payeeNames.filter((name) => !existingNames.has(name));
+
+      if (newPayeeNames.length > 0) {
+        const payeeTable = new sql.Table("dbo.Payees");
+        payeeTable.create = false;
+        payeeTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
+        payeeTable.columns.add("name", sql.NVarChar(400), { nullable: false });
+        newPayeeNames.forEach((name) => payeeTable.rows.add(userId, name));
+        await new sql.Request(transaction).bulk(payeeTable);
+      }
+    }
+
+    const billsTable = new sql.Table("dbo.Bills");
+    billsTable.create = false;
+    billsTable.columns.add("id", sql.UniqueIdentifier, { nullable: false });
+    billsTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
+    billsTable.columns.add("payee", sql.NVarChar(400), { nullable: false });
+    billsTable.columns.add("amount", sql.Decimal(12, 2), { nullable: true });
+    billsTable.columns.add("due_date", sql.Date, { nullable: false });
+    billsTable.columns.add("paid_date", sql.Date, { nullable: true });
+    billsTable.columns.add("notes", sql.NVarChar(sql.MAX), { nullable: false });
+    for (const row of rows) {
+      billsTable.rows.add(
+        randomUUID(),
+        userId,
+        row.payee,
+        row.amount,
+        parseDateOnly(row.dueDate),
+        row.paidDate ? parseDateOnly(row.paidDate) : null,
+        row.notes ?? ""
+      );
+    }
+    await new sql.Request(transaction).bulk(billsTable);
+
+    await transaction.commit();
+    return { inserted: rows.length };
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+}
+
 export async function updateBill(userId: string, id: string, patch: BillPatch): Promise<Bill> {
   const pool = await getPool();
   const request = pool

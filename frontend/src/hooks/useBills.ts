@@ -1,9 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { createBill, deleteBill, fetchBills, importBills, updateBill } from "../api/bills";
 import { PAYEES_KEY } from "./usePayees";
-import { Bill, BillInput, BillPatch } from "../types/bill";
+import { Bill, BillInput, BillPatch, ImportResult } from "../types/bill";
 
 const BILLS_KEY = ["bills"];
+
+// Matches the server's MAX_IMPORT_ROWS backstop (api/src/functions/billsImport.ts) — large
+// imports are split into requests this size so no single request can lag out or time out
+// regardless of total row count.
+export const IMPORT_CHUNK_SIZE = 500;
+
+export interface ImportProgress {
+  totalChunks: number;
+  completedChunks: number;
+  inserted: number;
+  errors: ImportResult["errors"];
+}
+
+function chunkRows<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
 
 export function useBillsQuery() {
   return useQuery({ queryKey: BILLS_KEY, queryFn: fetchBills });
@@ -64,13 +83,38 @@ export function useDeleteBill() {
   );
 }
 
+// Sends large imports as a sequence of small requests instead of one all-or-nothing request —
+// this is what fixed the prod incident where a single 10k-row import lagged out mid-request and
+// silently lost whatever hadn't been processed yet, with the client never receiving a response.
+// Splitting into chunks bounds each request's duration regardless of total row count, and
+// `progress.completedChunks` lets a caller resume from exactly where a failed attempt stopped
+// instead of resending already-committed rows.
 export function useImportBills() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (rows: BillInput[]) => importBills(rows),
-    onSuccess: () => {
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async (rows: BillInput[]) => {
+      const chunks = chunkRows(rows, IMPORT_CHUNK_SIZE);
+      const result: ImportResult = { inserted: 0, errors: [] };
+      setProgress({ totalChunks: chunks.length, completedChunks: 0, inserted: 0, errors: [] });
+
+      for (let i = 0; i < chunks.length; i++) {
+        const offset = i * IMPORT_CHUNK_SIZE;
+        const chunkResult = await importBills(chunks[i]);
+        result.inserted += chunkResult.inserted;
+        result.errors.push(...chunkResult.errors.map((e) => ({ ...e, rowIndex: e.rowIndex + offset })));
+        setProgress({ totalChunks: chunks.length, completedChunks: i + 1, inserted: result.inserted, errors: result.errors });
+      }
+      return result;
+    },
+    onSettled: () => {
+      // Invalidate on both success and failure — a failed attempt may still have committed
+      // some earlier chunks, and the grid should reflect that.
       queryClient.invalidateQueries({ queryKey: BILLS_KEY });
       queryClient.invalidateQueries({ queryKey: PAYEES_KEY });
     },
   });
+
+  return { ...mutation, progress };
 }
