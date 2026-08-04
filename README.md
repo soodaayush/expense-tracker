@@ -83,7 +83,7 @@ Run through this once locally before considering a change "done" (no automated t
 6. Log back in with the same passkey (this exercises the login ceremony, not sign-up).
 7. While logged in, click "Add passkey" to register a second device on the same account.
 8. **Create a second, separate account** and confirm it sees an empty bill list, not the first account's bills — this is the core isolation guarantee, worth checking after any change touching auth or the data layer.
-9. Go to "Import CSV", upload a small sample file (include at least one blank Amount, one blank Paid Date, and one malformed date), confirm the mapping/preview screen correctly flags the bad row, and that a successful import updates the grid and totals.
+9. Go to "Import CSV", upload a small sample file (include at least one blank Amount, one blank Paid Date, and one malformed date) — it imports immediately (columns are auto-detected, there's no mapping/preview step), so confirm the completion screen reports the bad row as skipped and that the grid/totals reflect the successfully imported rows.
 
 ## Deploying to Azure
 
@@ -262,4 +262,4 @@ Push to `staging` to trigger the new workflow. Visit the staging URL, create a t
 
 ## Migrating your existing spreadsheet
 
-Export your Dropbox spreadsheet to CSV, then use the "Import CSV" screen in the app. It expects (and will try to auto-detect) columns for Payee, Amount, Due Date, Paid Date, and Notes — you can remap them manually if your headers differ. Rows with unparseable dates or amounts are flagged and skipped rather than blocking the whole import.
+Export your Dropbox spreadsheet to CSV, then use the "Import CSV" screen in the app. It auto-detects columns for Payee, Amount, Due Date, Paid Date, and Notes and imports immediately — there's no manual remapping or preview step, so make sure your headers are recognizable (e.g. "Payee"/"Vendor", "Due Date"/"Due") before uploading. Rows with unparseable dates or amounts are skipped rather than blocking the whole import; the completion screen reports how many were skipped.

@@ -102,6 +102,23 @@
   overflow-x: auto;
 }
 
+.grid-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.grid-pager .btn-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .bills-table {
   width: 100%;
   border-collapse: collapse;

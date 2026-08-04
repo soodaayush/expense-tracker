@@ -2,11 +2,13 @@ import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
+  PaginationState,
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCreateBill, useDeleteBill, useUpdateBill } from "../../hooks/useBills";
 import { useAddPayee, usePayeesQuery } from "../../hooks/usePayees";
 import { sanitizeAmountInput } from "../../lib/numberInput";
@@ -36,6 +38,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const payeeOptions = payeesQuery.data ?? [];
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 100 });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [draft, setDraft] = useState(emptyDraft);
@@ -49,6 +52,12 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       return true;
     });
   }, [bills, search, statusFilter]);
+
+  // Narrowing the filter/search can leave a previously-valid page index pointing past the end
+  // of the new result set — jump back to page 1 whenever what's being filtered changes.
+  useEffect(() => {
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  }, [search, statusFilter]);
 
   function patch(id: string, field: string, value: string) {
     if (field === "amount") {
@@ -155,10 +164,12 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const table = useReactTable({
     data: filteredBills,
     columns,
-    state: { sorting },
+    state: { sorting, pagination },
     onSortingChange: setSorting,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
   function handleAdd() {
@@ -304,6 +315,25 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
         </tbody>
       </table>
       </div>
+
+      {table.getPageCount() > 1 && (
+        <div className="grid-pager">
+          <button
+            className="btn-link"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </button>
+          <span>
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} (
+            {filteredBills.length} bills)
+          </span>
+          <button className="btn-link" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
