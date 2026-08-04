@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
 import ColumnMapper from "../components/import/ColumnMapper";
 import CsvDropzone from "../components/import/CsvDropzone";
 import ImportPreviewTable from "../components/import/ImportPreviewTable";
-import { useImportBills } from "../hooks/useBills";
+import { IMPORT_CHUNK_SIZE, useImportBills } from "../hooks/useBills";
 import { guessColumnMapping, normalizeRow, TargetField } from "../lib/csvValidation";
+import { BillInput } from "../types/bill";
 
-type Step = "upload" | "map" | "preview" | "done";
+type Step = "upload" | "map" | "preview" | "importing" | "done";
 
 export default function ImportPage() {
   const [step, setStep] = useState<Step>("upload");
@@ -20,6 +21,11 @@ export default function ImportPage() {
     notes: null,
   });
 
+  // The rows most recently handed to the mutation and how many of them are already known-attempted
+  // from prior tries — lets a retry resend only what's left instead of the whole import.
+  const [pendingRows, setPendingRows] = useState<BillInput[]>([]);
+  const [importedBeforeThisAttempt, setImportedBeforeThisAttempt] = useState(0);
+
   const importMutation = useImportBills();
 
   const validatedRows = useMemo(() => rawRows.map((r) => normalizeRow(r, mapping)), [rawRows, mapping]);
@@ -31,10 +37,25 @@ export default function ImportPage() {
     setStep("map");
   }
 
-  async function handleImport() {
+  function startImport(rows: BillInput[]) {
+    setPendingRows(rows);
+    setStep("importing");
+    importMutation.mutate(rows, { onSuccess: () => setStep("done") });
+  }
+
+  function handleImport() {
     const validInputs = validatedRows.filter((r) => r.valid).map((r) => r.input);
-    await importMutation.mutateAsync(validInputs);
-    setStep("done");
+    setImportedBeforeThisAttempt(0);
+    startImport(validInputs);
+  }
+
+  function handleRetry() {
+    const attempted = Math.min(
+      (importMutation.progress?.completedChunks ?? 0) * IMPORT_CHUNK_SIZE,
+      pendingRows.length
+    );
+    setImportedBeforeThisAttempt((prev) => prev + attempted);
+    startImport(pendingRows.slice(attempted));
   }
 
   return (
@@ -75,10 +96,34 @@ export default function ImportPage() {
         </>
       )}
 
+      {step === "importing" && (
+        <div>
+          {importMutation.isError ? (
+            <>
+              <p className="auth-error">
+                Import stopped partway ({(importMutation.error as Error).message}). {importedBeforeThisAttempt}{" "}
+                of {pendingRows.length + importedBeforeThisAttempt} bills were saved before it failed — the rest
+                haven't been sent.
+              </p>
+              <button className="btn btn-primary" onClick={handleRetry}>
+                Retry remaining {pendingRows.length - (importMutation.progress?.completedChunks ?? 0) * IMPORT_CHUNK_SIZE} bills
+              </button>
+            </>
+          ) : (
+            <p>
+              Importing… {importMutation.progress?.inserted ?? 0} of {pendingRows.length} bills saved
+              {importMutation.progress
+                ? ` (batch ${importMutation.progress.completedChunks} of ${importMutation.progress.totalChunks})`
+                : ""}
+            </p>
+          )}
+        </div>
+      )}
+
       {step === "done" && importMutation.data && (
         <div>
           <p>
-            Imported {importMutation.data.inserted} bills.{" "}
+            Imported {importedBeforeThisAttempt + importMutation.data.inserted} bills.{" "}
             {importMutation.data.errors.length > 0 && `${importMutation.data.errors.length} rows failed.`}
           </p>
           {importMutation.data.errors.length > 0 && (
