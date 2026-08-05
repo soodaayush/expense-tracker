@@ -3,6 +3,7 @@ import { useSession } from "./hooks/useSession";
 import BillsPage from "./routes/BillsPage";
 import ImportPage from "./routes/ImportPage";
 import LoginPage from "./routes/LoginPage";
+import ManagePayeesPage from "./routes/ManagePayeesPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authenticated, isLoading } = useSession();
@@ -29,6 +30,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ImportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payees"
+        element={
+          <ProtectedRoute>
+            <ManagePayeesPage />
           </ProtectedRoute>
         }
       />

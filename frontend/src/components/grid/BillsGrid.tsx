@@ -35,7 +35,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const createBill = useCreateBill();
   const payeesQuery = usePayeesQuery();
   const addPayee = useAddPayee();
-  const payeeOptions = payeesQuery.data ?? [];
+  const payeeOptions = (payeesQuery.data ?? []).map((p) => p.name);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 100 });

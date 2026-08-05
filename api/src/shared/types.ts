@@ -1,5 +1,6 @@
 export interface Bill {
   id: string;
+  payeeId: string;
   payee: string;
   amount: number | null;
   dueDate: string;
@@ -7,6 +8,11 @@ export interface Bill {
   notes: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Payee {
+  id: string;
+  name: string;
 }
 
 export interface BillInput {

@@ -4,7 +4,7 @@ import { createBill, deleteBill, fetchBills, importBills, updateBill } from "../
 import { PAYEES_KEY } from "./usePayees";
 import { Bill, BillInput, BillPatch, ImportResult } from "../types/bill";
 
-const BILLS_KEY = ["bills"];
+export const BILLS_KEY = ["bills"];
 
 // Matches the server's MAX_IMPORT_ROWS backstop (api/src/functions/billsImport.ts) — large
 // imports are split into requests this size so no single request can lag out or time out
@@ -59,6 +59,7 @@ export function useCreateBill() {
       ...bills,
       {
         id: `temp-${Date.now()}`,
+        payeeId: `temp-${Date.now()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         ...input,

@@ -1,9 +1,13 @@
 import sql, { ConnectionPool } from "mssql";
 import { randomUUID } from "node:crypto";
-import { Bill, BillInput, BillPatch } from "../shared/types";
+import { Bill, BillInput, BillPatch, Payee } from "../shared/types";
 
 export class NotFoundError extends Error {
   statusCode = 404;
+}
+
+export class ConflictError extends Error {
+  statusCode = 409;
 }
 
 function requireEnv(name: string): string {
@@ -89,10 +93,14 @@ export async function getUser(userId: string): Promise<UserRecord | null> {
 // Every query here must be scoped to userId sourced only from the signed session — that's
 // the actual multi-tenant isolation boundary (mirrors the old Table Storage partition rule).
 
+// Reads payee_id/payee_name from a JOIN with Payees rather than Bills.payee (the legacy,
+// no-longer-authoritative string column — see the migration comment in schema.sql) so a bill's
+// displayed payee always reflects the payee's current name, even after a rename.
 function toBill(row: Record<string, unknown>): Bill {
   return {
     id: row.id as string,
-    payee: row.payee as string,
+    payeeId: row.payee_id as string,
+    payee: row.payee_name as string,
     amount: row.amount === null ? null : Number(row.amount),
     dueDate: formatDateOnly(row.due_date as Date),
     paidDate: row.paid_date === null ? null : formatDateOnly(row.paid_date as Date),
@@ -102,34 +110,52 @@ function toBill(row: Record<string, unknown>): Bill {
   };
 }
 
+const BILL_SELECT = `
+  SELECT b.id, b.payee_id, p.name AS payee_name, b.amount, b.due_date, b.paid_date, b.notes,
+         b.created_at, b.updated_at
+  FROM dbo.Bills b
+  JOIN dbo.Payees p ON p.id = b.payee_id
+`;
+
+async function getBillById(userId: string, id: string): Promise<Bill> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("id", sql.UniqueIdentifier, id)
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query(`${BILL_SELECT} WHERE b.id = @id AND b.user_id = @userId`);
+  if (result.recordset.length === 0) throw new NotFoundError("bill_not_found");
+  return toBill(result.recordset[0]);
+}
+
 export async function listBills(userId: string): Promise<Bill[]> {
   const pool = await getPool();
   const result = await pool
     .request()
     .input("userId", sql.UniqueIdentifier, userId)
-    .query("SELECT * FROM dbo.Bills WHERE user_id = @userId ORDER BY due_date DESC, created_at DESC");
+    .query(`${BILL_SELECT} WHERE b.user_id = @userId ORDER BY b.due_date DESC, b.created_at DESC`);
   return result.recordset.map(toBill);
 }
 
 export async function createBill(userId: string, input: BillInput): Promise<Bill> {
   const pool = await getPool();
   const id = randomUUID();
-  const result = await pool
+  const payee = await findOrCreatePayeeId(userId, input.payee);
+  await pool
     .request()
     .input("id", sql.UniqueIdentifier, id)
     .input("userId", sql.UniqueIdentifier, userId)
-    .input("payee", sql.NVarChar(400), input.payee)
+    .input("payeeId", sql.UniqueIdentifier, payee.id)
+    .input("payee", sql.NVarChar(400), payee.name)
     .input("amount", sql.Decimal(12, 2), input.amount)
     .input("dueDate", sql.Date, parseDateOnly(input.dueDate))
     .input("paidDate", sql.Date, input.paidDate ? parseDateOnly(input.paidDate) : null)
     .input("notes", sql.NVarChar(sql.MAX), input.notes ?? "")
     .query(
-      `INSERT INTO dbo.Bills (id, user_id, payee, amount, due_date, paid_date, notes)
-       OUTPUT INSERTED.*
-       VALUES (@id, @userId, @payee, @amount, @dueDate, @paidDate, @notes)`
+      `INSERT INTO dbo.Bills (id, user_id, payee_id, payee, amount, due_date, paid_date, notes)
+       VALUES (@id, @userId, @payeeId, @payee, @amount, @dueDate, @paidDate, @notes)`
     );
-  await ensurePayeeKnown(userId, input.payee);
-  return toBill(result.recordset[0]);
+  return getBillById(userId, id);
 }
 
 // Bulk path for CSV import: one bulk-copy round-trip per table instead of one INSERT per row,
@@ -141,24 +167,40 @@ export async function bulkCreateBills(userId: string, rows: BillInput[]): Promis
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
-    const payeeNames = [...new Set(rows.map((r) => r.payee.trim()).filter(Boolean))];
-    if (payeeNames.length > 0) {
+    // Keyed by lowercased name to match the DB's case-insensitive collation — a plain JS Set
+    // would let e.g. "Verizon" and "VERIZON" in the same chunk both look distinct, one of which
+    // would then collide with the other on insert and abort the whole chunk's bulk copy.
+    const nameByKey = new Map<string, string>();
+    for (const row of rows) {
+      const trimmed = row.payee.trim();
+      const key = trimmed.toLowerCase();
+      if (!nameByKey.has(key)) nameByKey.set(key, trimmed);
+    }
+
+    const idByKey = new Map<string, string>();
+    if (nameByKey.size > 0) {
+      const names = [...nameByKey.values()];
       const existingRequest = new sql.Request(transaction).input("userId", sql.UniqueIdentifier, userId);
-      payeeNames.forEach((name, i) => existingRequest.input(`p${i}`, sql.NVarChar(400), name));
+      names.forEach((name, i) => existingRequest.input(`p${i}`, sql.NVarChar(400), name));
       const existing = await existingRequest.query(
-        `SELECT name FROM dbo.Payees WHERE user_id = @userId AND name IN (${payeeNames
+        `SELECT id, name FROM dbo.Payees WHERE user_id = @userId AND name IN (${names
           .map((_, i) => `@p${i}`)
           .join(", ")})`
       );
-      const existingNames = new Set(existing.recordset.map((r) => r.name as string));
-      const newPayeeNames = payeeNames.filter((name) => !existingNames.has(name));
+      for (const r of existing.recordset) idByKey.set((r.name as string).toLowerCase(), r.id as string);
 
-      if (newPayeeNames.length > 0) {
+      const newKeys = [...nameByKey.keys()].filter((key) => !idByKey.has(key));
+      if (newKeys.length > 0) {
         const payeeTable = new sql.Table("dbo.Payees");
         payeeTable.create = false;
+        payeeTable.columns.add("id", sql.UniqueIdentifier, { nullable: false });
         payeeTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
         payeeTable.columns.add("name", sql.NVarChar(400), { nullable: false });
-        newPayeeNames.forEach((name) => payeeTable.rows.add(userId, name));
+        for (const key of newKeys) {
+          const id = randomUUID();
+          payeeTable.rows.add(id, userId, nameByKey.get(key));
+          idByKey.set(key, id);
+        }
         await new sql.Request(transaction).bulk(payeeTable);
       }
     }
@@ -167,16 +209,20 @@ export async function bulkCreateBills(userId: string, rows: BillInput[]): Promis
     billsTable.create = false;
     billsTable.columns.add("id", sql.UniqueIdentifier, { nullable: false });
     billsTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
+    billsTable.columns.add("payee_id", sql.UniqueIdentifier, { nullable: false });
     billsTable.columns.add("payee", sql.NVarChar(400), { nullable: false });
     billsTable.columns.add("amount", sql.Decimal(12, 2), { nullable: true });
     billsTable.columns.add("due_date", sql.Date, { nullable: false });
     billsTable.columns.add("paid_date", sql.Date, { nullable: true });
     billsTable.columns.add("notes", sql.NVarChar(sql.MAX), { nullable: false });
     for (const row of rows) {
+      const trimmed = row.payee.trim();
+      const payeeId = idByKey.get(trimmed.toLowerCase())!;
       billsTable.rows.add(
         randomUUID(),
         userId,
-        row.payee,
+        payeeId,
+        trimmed,
         row.amount,
         parseDateOnly(row.dueDate),
         row.paidDate ? parseDateOnly(row.paidDate) : null,
@@ -202,9 +248,11 @@ export async function updateBill(userId: string, id: string, patch: BillPatch): 
     .input("updatedAt", sql.DateTime2, new Date());
 
   const setClauses: string[] = ["updated_at = @updatedAt"];
-  if ("payee" in patch) {
-    setClauses.push("payee = @payee");
-    request.input("payee", sql.NVarChar(400), patch.payee);
+  if ("payee" in patch && patch.payee) {
+    const payee = await findOrCreatePayeeId(userId, patch.payee);
+    setClauses.push("payee_id = @payeeId", "payee = @payee");
+    request.input("payeeId", sql.UniqueIdentifier, payee.id);
+    request.input("payee", sql.NVarChar(400), payee.name);
   }
   if ("dueDate" in patch) {
     setClauses.push("due_date = @dueDate");
@@ -224,11 +272,10 @@ export async function updateBill(userId: string, id: string, patch: BillPatch): 
   }
 
   const result = await request.query(
-    `UPDATE dbo.Bills SET ${setClauses.join(", ")} OUTPUT INSERTED.* WHERE id = @id AND user_id = @userId`
+    `UPDATE dbo.Bills SET ${setClauses.join(", ")} OUTPUT INSERTED.id WHERE id = @id AND user_id = @userId`
   );
   if (result.recordset.length === 0) throw new NotFoundError("bill_not_found");
-  if (patch.payee) await ensurePayeeKnown(userId, patch.payee);
-  return toBill(result.recordset[0]);
+  return getBillById(userId, id);
 }
 
 export async function deleteBill(userId: string, id: string): Promise<void> {
@@ -242,37 +289,121 @@ export async function deleteBill(userId: string, id: string): Promise<void> {
 }
 
 // --- Payees ---
-// Composite PK (user_id, name) under the database's default case-insensitive collation
-// gives per-user, case-insensitive dedup for free — no separate slug/normalization needed.
+// Payees is now the source of truth for a payee's identity (id), not just a denormalized
+// autocomplete list — Bills.payee_id references it, so a rename here is visible on every bill
+// that uses it. The UNIQUE (user_id, name) constraint, under the database's default
+// case-insensitive collation, gives per-user case-insensitive dedup for free.
 
-const PK_VIOLATION_ERROR_NUMBERS = new Set([2627, 2601]);
+const UNIQUE_VIOLATION_ERROR_NUMBERS = new Set([2627, 2601]);
+const FK_VIOLATION_ERROR_NUMBER = 547;
 
-function isPrimaryKeyViolation(err: unknown): boolean {
+function isUniqueViolation(err: unknown): boolean {
   const number = (err as { number?: number })?.number;
-  return typeof number === "number" && PK_VIOLATION_ERROR_NUMBERS.has(number);
+  return typeof number === "number" && UNIQUE_VIOLATION_ERROR_NUMBERS.has(number);
 }
 
-export async function listPayees(userId: string): Promise<string[]> {
+function isForeignKeyViolation(err: unknown): boolean {
+  return (err as { number?: number })?.number === FK_VIOLATION_ERROR_NUMBER;
+}
+
+export async function listPayees(userId: string): Promise<Payee[]> {
   const pool = await getPool();
   const result = await pool
     .request()
     .input("userId", sql.UniqueIdentifier, userId)
-    .query("SELECT name FROM dbo.Payees WHERE user_id = @userId ORDER BY name");
-  return result.recordset.map((row) => row.name as string);
+    .query("SELECT id, name FROM dbo.Payees WHERE user_id = @userId ORDER BY name");
+  return result.recordset.map((row) => ({ id: row.id as string, name: row.name as string }));
 }
 
-export async function ensurePayeeKnown(userId: string, name: string): Promise<void> {
-  const trimmed = name.trim();
-  if (!trimmed) return;
+// Resolves a payee by name for a user, creating it if it doesn't exist yet — this must run
+// before a Bills insert now, since payee_id is a required NOT NULL foreign key rather than a
+// fire-and-forget side effect the way the old denormalized Payees list was.
+export async function findOrCreatePayeeId(userId: string, rawName: string): Promise<Payee> {
+  const name = rawName.trim();
   const pool = await getPool();
+
+  const existing = await pool
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .input("name", sql.NVarChar(400), name)
+    .query("SELECT id, name FROM dbo.Payees WHERE user_id = @userId AND name = @name");
+  if (existing.recordset[0]) {
+    return { id: existing.recordset[0].id, name: existing.recordset[0].name };
+  }
+
+  const id = randomUUID();
   try {
     await pool
       .request()
+      .input("id", sql.UniqueIdentifier, id)
       .input("userId", sql.UniqueIdentifier, userId)
-      .input("name", sql.NVarChar(400), trimmed)
-      .query("INSERT INTO dbo.Payees (user_id, name) VALUES (@userId, @name)");
+      .input("name", sql.NVarChar(400), name)
+      .query("INSERT INTO dbo.Payees (id, user_id, name) VALUES (@id, @userId, @name)");
+    return { id, name };
   } catch (err) {
-    if (!isPrimaryKeyViolation(err)) throw err;
+    if (!isUniqueViolation(err)) throw err;
+    // Lost a race to a concurrent insert of the same (user_id, name) — the winner already exists.
+    const retry = await pool
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("name", sql.NVarChar(400), name)
+      .query("SELECT id, name FROM dbo.Payees WHERE user_id = @userId AND name = @name");
+    if (!retry.recordset[0]) throw err;
+    return { id: retry.recordset[0].id, name: retry.recordset[0].name };
+  }
+}
+
+export async function ensurePayeeKnown(userId: string, name: string): Promise<void> {
+  if (!name.trim()) return;
+  await findOrCreatePayeeId(userId, name);
+}
+
+export async function updatePayee(userId: string, payeeId: string, newName: string): Promise<Payee> {
+  const pool = await getPool();
+  try {
+    const result = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, payeeId)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("name", sql.NVarChar(400), newName)
+      .query(
+        "UPDATE dbo.Payees SET name = @name OUTPUT INSERTED.id, INSERTED.name WHERE id = @id AND user_id = @userId"
+      );
+    if (result.recordset.length === 0) throw new NotFoundError("payee_not_found");
+    return { id: result.recordset[0].id, name: result.recordset[0].name };
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new ConflictError("A payee with that name already exists");
+    throw err;
+  }
+}
+
+export async function deletePayee(userId: string, payeeId: string): Promise<void> {
+  const pool = await getPool();
+  const countResult = await pool
+    .request()
+    .input("id", sql.UniqueIdentifier, payeeId)
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query("SELECT COUNT(*) AS billCount FROM dbo.Bills WHERE payee_id = @id AND user_id = @userId");
+  const billCount = countResult.recordset[0].billCount as number;
+  if (billCount > 0) {
+    throw new ConflictError(`This payee is used by ${billCount} bill${billCount === 1 ? "" : "s"} and can't be deleted`);
+  }
+
+  try {
+    const result = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, payeeId)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query("DELETE FROM dbo.Payees WHERE id = @id AND user_id = @userId");
+    if (result.rowsAffected[0] === 0) throw new NotFoundError("payee_not_found");
+  } catch (err) {
+    if (isForeignKeyViolation(err)) {
+      // Closes the race between the count check above and this delete: a bill attached to this
+      // payee in between is caught here by the real FK constraint (schema.sql's ON DELETE
+      // NO ACTION), not just the app-level check.
+      throw new ConflictError("This payee is now used by one or more bills and can't be deleted");
+    }
+    throw err;
   }
 }
 

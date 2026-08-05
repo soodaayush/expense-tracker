@@ -13,3 +13,5 @@ import "./functions/billsDelete";
 import "./functions/billsImport";
 import "./functions/payeesList";
 import "./functions/payeesCreate";
+import "./functions/payeesUpdate";
+import "./functions/payeesDelete";

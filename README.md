@@ -84,6 +84,7 @@ Run through this once locally before considering a change "done" (no automated t
 7. While logged in, click "Add passkey" to register a second device on the same account.
 8. **Create a second, separate account** and confirm it sees an empty bill list, not the first account's bills — this is the core isolation guarantee, worth checking after any change touching auth or the data layer.
 9. Go to "Import CSV", upload a small sample file (include at least one blank Amount, one blank Paid Date, and one malformed date), confirm the mapping screen auto-detects columns correctly, confirm the preview screen flags the bad row as invalid, and that clicking Import updates the grid and totals.
+10. Go to "Manage Payees", rename a payee that's used by an existing bill, and confirm the bills grid shows the new name without you having touched that bill directly. Try deleting a payee that's still in use — confirm it's blocked with a clear error. Delete a payee with no bills — confirm it's removed.
 
 ## Deploying to Azure
 
