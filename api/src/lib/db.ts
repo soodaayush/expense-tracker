@@ -28,8 +28,11 @@ function buildConfig(): sql.config {
       trustServerCertificate: process.env.SQL_TRUST_SERVER_CERT === "true",
     },
     pool: { max: 5, min: 0, idleTimeoutMillis: 30000 },
-    connectionTimeout: 30000,
-    requestTimeout: 30000,
+    // Azure SQL serverless auto-pauses on inactivity; the first connection after a pause can
+    // take up to ~a minute to resume. 30s was shorter than that, so the very first request
+    // after a pause would hard-fail with a connection timeout instead of just being slow.
+    connectionTimeout: 120000,
+    requestTimeout: 120000,
   };
 }
 

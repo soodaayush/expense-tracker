@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import SlowRequestBanner from "./components/SlowRequestBanner";
 import { useSession } from "./hooks/useSession";
 import BillsPage from "./routes/BillsPage";
 import ImportPage from "./routes/ImportPage";
@@ -15,33 +16,36 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <BillsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/import"
-        element={
-          <ProtectedRoute>
-            <ImportPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/payees"
-        element={
-          <ProtectedRoute>
-            <ManagePayeesPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <SlowRequestBanner />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <BillsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/import"
+          element={
+            <ProtectedRoute>
+              <ImportPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payees"
+          element={
+            <ProtectedRoute>
+              <ManagePayeesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
