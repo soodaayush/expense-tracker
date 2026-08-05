@@ -24,7 +24,9 @@ export default function PayeeSelect({
   const [draft, setDraft] = useState(value);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Popover needs the anchor as state, not just a ref — see the comment in Popover.tsx.
+  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,7 +97,13 @@ export default function PayeeSelect({
   }
 
   return (
-    <div className="payee-select" ref={containerRef}>
+    <div
+      className="payee-select"
+      ref={(el) => {
+        containerRef.current = el;
+        setAnchorEl(el);
+      }}
+    >
       <input
         ref={inputRef}
         id={id}
@@ -122,7 +130,7 @@ export default function PayeeSelect({
           }
         }}
       />
-      <Popover anchorRef={containerRef} popoverRef={popoverRef} open={listItems.length > 0} className="payee-listbox">
+      <Popover anchorEl={anchorEl} popoverRef={popoverRef} open={listItems.length > 0} className="payee-listbox">
         {listItems.map((item, i) => (
           <button
             key={item}
