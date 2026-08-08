@@ -1,6 +1,6 @@
 import sql, { ConnectionPool } from "mssql";
 import { randomUUID } from "node:crypto";
-import { Bill, BillInput, BillPatch, Payee } from "../shared/types";
+import { Bill, BillInput, BillPatch, Payee, PaymentMethod } from "../shared/types";
 
 export class NotFoundError extends Error {
   statusCode = 404;
@@ -104,6 +104,8 @@ function toBill(row: Record<string, unknown>): Bill {
     id: row.id as string,
     payeeId: row.payee_id as string,
     payee: row.payee_name as string,
+    paymentMethodId: (row.payment_method_id as string | null) ?? null,
+    paymentMethod: (row.payment_method_name as string | null) ?? null,
     amount: row.amount === null ? null : Number(row.amount),
     dueDate: formatDateOnly(row.due_date as Date),
     paidDate: row.paid_date === null ? null : formatDateOnly(row.paid_date as Date),
@@ -113,11 +115,14 @@ function toBill(row: Record<string, unknown>): Bill {
   };
 }
 
+// LEFT JOINed since payment_method_id is nullable (unlike payee_id) — a bill with no payment
+// method assigned should still come back, just with paymentMethod: null.
 const BILL_SELECT = `
-  SELECT b.id, b.payee_id, p.name AS payee_name, b.amount, b.due_date, b.paid_date, b.notes,
-         b.created_at, b.updated_at
+  SELECT b.id, b.payee_id, p.name AS payee_name, b.payment_method_id, pm.name AS payment_method_name,
+         b.amount, b.due_date, b.paid_date, b.notes, b.created_at, b.updated_at
   FROM dbo.Bills b
   JOIN dbo.Payees p ON p.id = b.payee_id
+  LEFT JOIN dbo.PaymentMethods pm ON pm.id = b.payment_method_id
 `;
 
 async function getBillById(userId: string, id: string): Promise<Bill> {
@@ -144,19 +149,23 @@ export async function createBill(userId: string, input: BillInput): Promise<Bill
   const pool = await getPool();
   const id = randomUUID();
   const payee = await findOrCreatePayeeId(userId, input.payee);
+  const paymentMethodId = input.paymentMethod
+    ? (await findOrCreatePaymentMethodId(userId, input.paymentMethod)).id
+    : null;
   await pool
     .request()
     .input("id", sql.UniqueIdentifier, id)
     .input("userId", sql.UniqueIdentifier, userId)
     .input("payeeId", sql.UniqueIdentifier, payee.id)
     .input("payee", sql.NVarChar(400), payee.name)
+    .input("paymentMethodId", sql.UniqueIdentifier, paymentMethodId)
     .input("amount", sql.Decimal(12, 2), input.amount)
     .input("dueDate", sql.Date, parseDateOnly(input.dueDate))
     .input("paidDate", sql.Date, input.paidDate ? parseDateOnly(input.paidDate) : null)
     .input("notes", sql.NVarChar(sql.MAX), input.notes ?? "")
     .query(
-      `INSERT INTO dbo.Bills (id, user_id, payee_id, payee, amount, due_date, paid_date, notes)
-       VALUES (@id, @userId, @payeeId, @payee, @amount, @dueDate, @paidDate, @notes)`
+      `INSERT INTO dbo.Bills (id, user_id, payee_id, payee, payment_method_id, amount, due_date, paid_date, notes)
+       VALUES (@id, @userId, @payeeId, @payee, @paymentMethodId, @amount, @dueDate, @paidDate, @notes)`
     );
   return getBillById(userId, id);
 }
@@ -256,6 +265,13 @@ export async function updateBill(userId: string, id: string, patch: BillPatch): 
     setClauses.push("payee_id = @payeeId", "payee = @payee");
     request.input("payeeId", sql.UniqueIdentifier, payee.id);
     request.input("payee", sql.NVarChar(400), payee.name);
+  }
+  if ("paymentMethod" in patch) {
+    const paymentMethodId = patch.paymentMethod
+      ? (await findOrCreatePaymentMethodId(userId, patch.paymentMethod)).id
+      : null;
+    setClauses.push("payment_method_id = @paymentMethodId");
+    request.input("paymentMethodId", sql.UniqueIdentifier, paymentMethodId);
   }
   if ("dueDate" in patch) {
     setClauses.push("due_date = @dueDate");
@@ -405,6 +421,109 @@ export async function deletePayee(userId: string, payeeId: string): Promise<void
       // payee in between is caught here by the real FK constraint (schema.sql's ON DELETE
       // NO ACTION), not just the app-level check.
       throw new ConflictError("This payee is now used by one or more bills and can't be deleted");
+    }
+    throw err;
+  }
+}
+
+// --- Payment Methods ---
+// Same shape as Payees, but the FK on Bills is nullable (a bill needn't have a payment method
+// assigned), so there's no findOrCreate-before-insert requirement and no legacy denormalized
+// column to migrate off of.
+
+export async function listPaymentMethods(userId: string): Promise<PaymentMethod[]> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query("SELECT id, name FROM dbo.PaymentMethods WHERE user_id = @userId ORDER BY name");
+  return result.recordset.map((row) => ({ id: row.id as string, name: row.name as string }));
+}
+
+export async function findOrCreatePaymentMethodId(userId: string, rawName: string): Promise<PaymentMethod> {
+  const name = rawName.trim();
+  const pool = await getPool();
+
+  const existing = await pool
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .input("name", sql.NVarChar(200), name)
+    .query("SELECT id, name FROM dbo.PaymentMethods WHERE user_id = @userId AND name = @name");
+  if (existing.recordset[0]) {
+    return { id: existing.recordset[0].id, name: existing.recordset[0].name };
+  }
+
+  const id = randomUUID();
+  try {
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, id)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("name", sql.NVarChar(200), name)
+      .query("INSERT INTO dbo.PaymentMethods (id, user_id, name) VALUES (@id, @userId, @name)");
+    return { id, name };
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    // Lost a race to a concurrent insert of the same (user_id, name) — the winner already exists.
+    const retry = await pool
+      .request()
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("name", sql.NVarChar(200), name)
+      .query("SELECT id, name FROM dbo.PaymentMethods WHERE user_id = @userId AND name = @name");
+    if (!retry.recordset[0]) throw err;
+    return { id: retry.recordset[0].id, name: retry.recordset[0].name };
+  }
+}
+
+export async function ensurePaymentMethodKnown(userId: string, name: string): Promise<void> {
+  if (!name.trim()) return;
+  await findOrCreatePaymentMethodId(userId, name);
+}
+
+export async function updatePaymentMethod(userId: string, id: string, newName: string): Promise<PaymentMethod> {
+  const pool = await getPool();
+  try {
+    const result = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, id)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .input("name", sql.NVarChar(200), newName)
+      .query(
+        "UPDATE dbo.PaymentMethods SET name = @name OUTPUT INSERTED.id, INSERTED.name WHERE id = @id AND user_id = @userId"
+      );
+    if (result.recordset.length === 0) throw new NotFoundError("payment_method_not_found");
+    return { id: result.recordset[0].id, name: result.recordset[0].name };
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new ConflictError("A payment method with that name already exists");
+    throw err;
+  }
+}
+
+export async function deletePaymentMethod(userId: string, id: string): Promise<void> {
+  const pool = await getPool();
+  const countResult = await pool
+    .request()
+    .input("id", sql.UniqueIdentifier, id)
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query("SELECT COUNT(*) AS billCount FROM dbo.Bills WHERE payment_method_id = @id AND user_id = @userId");
+  const billCount = countResult.recordset[0].billCount as number;
+  if (billCount > 0) {
+    throw new ConflictError(
+      `This payment method is used by ${billCount} bill${billCount === 1 ? "" : "s"} and can't be deleted`
+    );
+  }
+
+  try {
+    const result = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, id)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query("DELETE FROM dbo.PaymentMethods WHERE id = @id AND user_id = @userId");
+    if (result.rowsAffected[0] === 0) throw new NotFoundError("payment_method_not_found");
+  } catch (err) {
+    if (isForeignKeyViolation(err)) {
+      // Closes the race between the count check above and this delete, same as deletePayee.
+      throw new ConflictError("This payment method is now used by one or more bills and can't be deleted");
     }
     throw err;
   }

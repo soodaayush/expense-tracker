@@ -44,6 +44,9 @@ export default function BillsPage() {
           <Link to="/payees" className="btn-link">
             Manage Payees
           </Link>
+          <Link to="/payment-methods" className="btn-link">
+            Manage Payment Methods
+          </Link>
           <button className="btn-link" onClick={handleAddPasskey} disabled={addingPasskey}>
             Add passkey
           </button>

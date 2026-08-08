@@ -82,7 +82,7 @@
 }
 
 .add-row .cell-display,
-.add-row .payee-select .cell-input {
+.add-row .combo-select .cell-input {
   height: 38px;
   box-sizing: border-box;
   display: flex;
@@ -209,11 +209,11 @@
   outline: none;
 }
 
-.payee-select {
+.combo-select {
   position: relative;
 }
 
-.payee-listbox {
+.combo-listbox {
   z-index: 20;
   max-height: 220px;
   overflow-y: auto;
@@ -224,7 +224,7 @@
   padding: 4px;
 }
 
-.payee-option {
+.combo-option {
   display: block;
   width: 100%;
   text-align: left;
@@ -241,7 +241,7 @@
   text-overflow: ellipsis;
 }
 
-.payee-option-active {
+.combo-option-active {
   background: var(--color-primary-soft);
   color: var(--color-primary);
 }

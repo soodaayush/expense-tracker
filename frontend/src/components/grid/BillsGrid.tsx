@@ -11,11 +11,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useCreateBill, useDeleteBill, useUpdateBill } from "../../hooks/useBills";
 import { useAddPayee, usePayeesQuery } from "../../hooks/usePayees";
+import { useAddPaymentMethod, usePaymentMethodsQuery } from "../../hooks/usePaymentMethods";
 import { sanitizeAmountInput } from "../../lib/numberInput";
 import { Bill } from "../../types/bill";
+import ComboSelect from "./ComboSelect";
 import DatePicker from "./DatePicker";
 import EditableCell from "./EditableCell";
-import PayeeSelect from "./PayeeSelect";
 import RowActions from "./RowActions";
 
 const currency = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
@@ -27,7 +28,7 @@ function isPastDue(bill: Bill): boolean {
 
 type StatusFilter = "all" | "unpaid" | "paid";
 
-const emptyDraft = { payee: "", amount: "", dueDate: "", paidDate: "", notes: "" };
+const emptyDraft = { payee: "", paymentMethod: "", amount: "", dueDate: "", paidDate: "", notes: "" };
 
 export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const updateBill = useUpdateBill();
@@ -36,6 +37,9 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const payeesQuery = usePayeesQuery();
   const addPayee = useAddPayee();
   const payeeOptions = (payeesQuery.data ?? []).map((p) => p.name);
+  const paymentMethodsQuery = usePaymentMethodsQuery();
+  const addPaymentMethod = useAddPaymentMethod();
+  const paymentMethodOptions = (paymentMethodsQuery.data ?? []).map((p) => p.name);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 100 });
@@ -64,6 +68,8 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       updateBill.mutate({ id, patch: { amount: value === "" ? null : Number(value) } });
     } else if (field === "paidDate") {
       updateBill.mutate({ id, patch: { paidDate: value === "" ? null : value } });
+    } else if (field === "paymentMethod") {
+      updateBill.mutate({ id, patch: { paymentMethod: value === "" ? null : value } });
     } else {
       updateBill.mutate({ id, patch: { [field]: value } });
     }
@@ -77,12 +83,29 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
         accessorKey: "payee",
         enableSorting: true,
         cell: ({ row }) => (
-          <PayeeSelect
+          <ComboSelect
             value={row.original.payee}
             options={payeeOptions}
             label="Payee"
             onCommit={(v) => patch(row.original.id, "payee", v)}
             onAddOption={(v) => addPayee.mutate(v)}
+          />
+        ),
+      },
+      {
+        id: "paymentMethod",
+        header: "Payment Method",
+        accessorFn: (b) => b.paymentMethod ?? "",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <ComboSelect
+            value={row.original.paymentMethod ?? ""}
+            options={paymentMethodOptions}
+            placeholder="—"
+            label="Payment method"
+            allowClear
+            onCommit={(v) => patch(row.original.id, "paymentMethod", v)}
+            onAddOption={(v) => addPaymentMethod.mutate(v)}
           />
         ),
       },
@@ -158,7 +181,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateBill, deleteBill, payeeOptions, addPayee]
+    [updateBill, deleteBill, payeeOptions, addPayee, paymentMethodOptions, addPaymentMethod]
   );
 
   const table = useReactTable({
@@ -184,6 +207,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
     }
     createBill.mutate({
       payee: draft.payee.trim(),
+      paymentMethod: draft.paymentMethod === "" ? null : draft.paymentMethod,
       amount: draft.amount === "" ? null : Number(draft.amount),
       dueDate: draft.dueDate,
       paidDate: draft.paidDate === "" ? null : draft.paidDate,
@@ -217,7 +241,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       <div className="add-row">
         <div className="field">
           <label htmlFor="add-payee">Payee</label>
-          <PayeeSelect
+          <ComboSelect
             id="add-payee"
             label="Payee"
             value={draft.payee}
@@ -225,6 +249,19 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
             placeholder="Payee"
             onCommit={(v) => setDraft((d) => ({ ...d, payee: v }))}
             onAddOption={(v) => addPayee.mutate(v)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-payment-method">Payment method</label>
+          <ComboSelect
+            id="add-payment-method"
+            label="Payment method"
+            value={draft.paymentMethod}
+            options={paymentMethodOptions}
+            placeholder="—"
+            allowClear
+            onCommit={(v) => setDraft((d) => ({ ...d, paymentMethod: v }))}
+            onAddOption={(v) => addPaymentMethod.mutate(v)}
           />
         </div>
         <div className="field">

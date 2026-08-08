@@ -15,3 +15,7 @@ import "./functions/payeesList";
 import "./functions/payeesCreate";
 import "./functions/payeesUpdate";
 import "./functions/payeesDelete";
+import "./functions/paymentMethodsList";
+import "./functions/paymentMethodsCreate";
+import "./functions/paymentMethodsUpdate";
+import "./functions/paymentMethodsDelete";

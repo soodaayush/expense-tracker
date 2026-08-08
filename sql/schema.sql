@@ -106,6 +106,36 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Bills_PayeeId' AND obj
   CREATE INDEX IX_Bills_PayeeId ON dbo.Bills(payee_id);
 GO
 
+IF OBJECT_ID('dbo.PaymentMethods', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.PaymentMethods (
+    id          UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    user_id     UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_PaymentMethods_Users REFERENCES dbo.Users(user_id) ON DELETE CASCADE,
+    name        NVARCHAR(200)    NOT NULL,
+    created_at  DATETIME2(3)     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_PaymentMethods_UserId_Name UNIQUE (user_id, name)
+  );
+END
+GO
+
+-- Unlike Payees, this is a new optional field: existing bills carry no payment-method
+-- information to backfill, so payment_method_id stays nullable and there's no legacy
+-- denormalized text column to migrate off of.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Bills') AND name = 'payment_method_id')
+  ALTER TABLE dbo.Bills ADD payment_method_id UNIQUEIDENTIFIER NULL;
+GO
+
+-- NO ACTION, not CASCADE, matching FK_Bills_Payees: Users already cascades to both Bills and
+-- PaymentMethods directly, and a cascading Bills -> PaymentMethods FK on top of that creates the
+-- same ambiguous multi-path scenario SQL Server refuses to create (error 1785).
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Bills_PaymentMethods')
+  ALTER TABLE dbo.Bills ADD CONSTRAINT FK_Bills_PaymentMethods FOREIGN KEY (payment_method_id) REFERENCES dbo.PaymentMethods(id) ON DELETE NO ACTION;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Bills_PaymentMethodId' AND object_id = OBJECT_ID('dbo.Bills'))
+  CREATE INDEX IX_Bills_PaymentMethodId ON dbo.Bills(payment_method_id);
+GO
+
 IF OBJECT_ID('dbo.Credentials', 'U') IS NULL
 BEGIN
   CREATE TABLE dbo.Credentials (

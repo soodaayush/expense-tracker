@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { createBill, deleteBill, fetchBills, importBills, updateBill } from "../api/bills";
 import { PAYEES_KEY } from "./usePayees";
+import { PAYMENT_METHODS_KEY } from "./usePaymentMethods";
 import { Bill, BillInput, BillPatch, ImportResult } from "../types/bill";
 
 export const BILLS_KEY = ["bills"];
@@ -31,7 +32,7 @@ export function useBillsQuery() {
 function useOptimisticMutation<TVariables>(
   mutationFn: (vars: TVariables) => Promise<unknown>,
   updater: (bills: Bill[], vars: TVariables) => Bill[],
-  options: { invalidatePayees?: boolean } = {}
+  options: { invalidatePayees?: boolean; invalidatePaymentMethods?: boolean } = {}
 ) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -48,6 +49,7 @@ function useOptimisticMutation<TVariables>(
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: BILLS_KEY });
       if (options.invalidatePayees) queryClient.invalidateQueries({ queryKey: PAYEES_KEY });
+      if (options.invalidatePaymentMethods) queryClient.invalidateQueries({ queryKey: PAYMENT_METHODS_KEY });
     },
   });
 }
@@ -60,12 +62,13 @@ export function useCreateBill() {
       {
         id: `temp-${Date.now()}`,
         payeeId: `temp-${Date.now()}`,
+        paymentMethodId: `temp-${Date.now()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         ...input,
       },
     ],
-    { invalidatePayees: true }
+    { invalidatePayees: true, invalidatePaymentMethods: true }
   );
 }
 
@@ -73,7 +76,7 @@ export function useUpdateBill() {
   return useOptimisticMutation<{ id: string; patch: BillPatch }>(
     ({ id, patch }) => updateBill(id, patch),
     (bills, { id, patch }) => bills.map((bill) => (bill.id === id ? { ...bill, ...patch } : bill)),
-    { invalidatePayees: true }
+    { invalidatePayees: true, invalidatePaymentMethods: true }
   );
 }
 
