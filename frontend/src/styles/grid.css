@@ -162,6 +162,15 @@
   border-left: 3px solid var(--color-warning);
 }
 
+.bills-table tbody tr.row-late-paid {
+  border-left: 3px solid var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+.bills-table tbody tr.row-late-paid:hover {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+
 .bills-table td {
   padding: 6px 10px;
   vertical-align: middle;

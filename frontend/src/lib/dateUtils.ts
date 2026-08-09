@@ -54,3 +54,17 @@ export function formatDisplayDate(value: string): string {
 export function formatMonthLabel(date: Date): string {
   return MONTH_FORMAT.format(date);
 }
+
+// Groups an ISO "YYYY-MM-DD" date into its calendar quarter, e.g. "2026-Q1". Built from the
+// string directly (not parseISODate) since callers only ever have the raw date string on hand
+// and quarter buckets are naturally comparable/sortable as plain strings in this format.
+export function quarterKey(isoDate: string): string {
+  const year = isoDate.slice(0, 4);
+  const quarter = Math.ceil(Number(isoDate.slice(5, 7)) / 3);
+  return `${year}-Q${quarter}`;
+}
+
+export function formatQuarterLabel(key: string): string {
+  const [year, quarter] = key.split("-Q");
+  return `Q${quarter} ${year}`;
+}

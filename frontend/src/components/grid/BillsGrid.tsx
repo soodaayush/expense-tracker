@@ -2,9 +2,7 @@ import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
-  PaginationState,
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
@@ -12,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCreateBill, useDeleteBill, useUpdateBill } from "../../hooks/useBills";
 import { useAddPayee, usePayeesQuery } from "../../hooks/usePayees";
 import { useAddPaymentMethod, usePaymentMethodsQuery } from "../../hooks/usePaymentMethods";
+import { formatQuarterLabel, quarterKey } from "../../lib/dateUtils";
 import { sanitizeAmountInput } from "../../lib/numberInput";
 import { Bill } from "../../types/bill";
 import ComboSelect from "./ComboSelect";
@@ -24,6 +23,10 @@ const currency = new Intl.NumberFormat("en-CA", { style: "currency", currency: "
 function isPastDue(bill: Bill): boolean {
   if (bill.paidDate) return false;
   return bill.dueDate < new Date().toISOString().slice(0, 10);
+}
+
+function isLatePaid(bill: Bill): boolean {
+  return !!bill.paidDate && bill.paidDate > bill.dueDate;
 }
 
 type StatusFilter = "all" | "unpaid" | "paid";
@@ -42,7 +45,8 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const paymentMethodOptions = (paymentMethodsQuery.data ?? []).map((p) => p.name);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: true }]);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 100 });
+  const [quarterIndex, setQuarterIndex] = useState(0);
+  const [focusQuarter, setFocusQuarter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [draft, setDraft] = useState(emptyDraft);
@@ -57,11 +61,42 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
     });
   }, [bills, search, statusFilter]);
 
-  // Narrowing the filter/search can leave a previously-valid page index pointing past the end
-  // of the new result set — jump back to page 1 whenever what's being filtered changes.
+  // Quarters (by due date) newest-first, so index 0 always lines up with the default
+  // due-date-descending sort and with "jump back to the newest quarter" below.
+  const quarters = useMemo(() => {
+    const keys = new Set(filteredBills.map((bill) => quarterKey(bill.dueDate)));
+    return [...keys].sort().reverse();
+  }, [filteredBills]);
+
+  // Narrowing the filter/search can leave a previously-valid quarter index pointing past the
+  // end of the new result set — jump back to the newest quarter whenever what's being filtered
+  // changes.
   useEffect(() => {
-    setPagination((p) => ({ ...p, pageIndex: 0 }));
+    setQuarterIndex(0);
   }, [search, statusFilter]);
+
+  // Deleting the last bill in a quarter (or any other shrink not caused by search/statusFilter)
+  // can also leave the index out of range — clamp it back onto the list.
+  useEffect(() => {
+    setQuarterIndex((i) => Math.min(i, Math.max(quarters.length - 1, 0)));
+  }, [quarters.length]);
+
+  // After adding a bill, jump to whichever quarter it landed in — otherwise a bill due outside
+  // the currently-viewed quarter would silently vanish from the grid the moment it's created.
+  useEffect(() => {
+    if (!focusQuarter) return;
+    const idx = quarters.indexOf(focusQuarter);
+    if (idx !== -1) {
+      setQuarterIndex(idx);
+      setFocusQuarter(null);
+    }
+  }, [focusQuarter, quarters]);
+
+  const currentQuarterKey = quarters[quarterIndex];
+  const quarterBills = useMemo(
+    () => (currentQuarterKey ? filteredBills.filter((bill) => quarterKey(bill.dueDate) === currentQuarterKey) : []),
+    [filteredBills, currentQuarterKey]
+  );
 
   function patch(id: string, field: string, value: string) {
     if (field === "amount") {
@@ -185,14 +220,12 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   );
 
   const table = useReactTable({
-    data: filteredBills,
+    data: quarterBills,
     columns,
-    state: { sorting, pagination },
+    state: { sorting },
     onSortingChange: setSorting,
-    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
   });
 
   function handleAdd() {
@@ -213,6 +246,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       paidDate: draft.paidDate === "" ? null : draft.paidDate,
       notes: draft.notes,
     });
+    setFocusQuarter(quarterKey(draft.dueDate));
     setDraft(emptyDraft);
   }
 
@@ -336,16 +370,19 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id} className={isPastDue(row.original) ? "row-past-due" : ""}>
+            <tr
+              key={row.id}
+              className={isLatePaid(row.original) ? "row-late-paid" : isPastDue(row.original) ? "row-past-due" : ""}
+            >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
               ))}
             </tr>
           ))}
-          {filteredBills.length === 0 && (
+          {quarterBills.length === 0 && (
             <tr>
               <td colSpan={columns.length} className="empty-state">
-                No bills yet.
+                {filteredBills.length === 0 ? "No bills yet." : "No bills in this quarter."}
               </td>
             </tr>
           )}
@@ -353,20 +390,24 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       </table>
       </div>
 
-      {table.getPageCount() > 1 && (
+      {quarters.length > 0 && (
         <div className="grid-pager">
           <button
             className="btn-link"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => setQuarterIndex((i) => Math.min(i + 1, quarters.length - 1))}
+            disabled={quarterIndex >= quarters.length - 1}
           >
             Previous
           </button>
           <span>
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} (
-            {filteredBills.length} bills)
+            {formatQuarterLabel(currentQuarterKey)} ({quarterIndex + 1} of {quarters.length} quarters ·{" "}
+            {quarterBills.length} bills)
           </span>
-          <button className="btn-link" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          <button
+            className="btn-link"
+            onClick={() => setQuarterIndex((i) => Math.max(i - 1, 0))}
+            disabled={quarterIndex <= 0}
+          >
             Next
           </button>
         </div>
