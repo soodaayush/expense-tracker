@@ -82,7 +82,7 @@
 }
 
 .add-row .cell-display,
-.add-row .payee-select .cell-input {
+.add-row .combo-select .cell-input {
   height: 38px;
   box-sizing: border-box;
   display: flex;
@@ -100,6 +100,23 @@
 
 .table-scroll {
   overflow-x: auto;
+}
+
+.grid-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.grid-pager .btn-link:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .bills-table {
@@ -143,6 +160,15 @@
 
 .bills-table tbody tr.row-past-due {
   border-left: 3px solid var(--color-warning);
+}
+
+.bills-table tbody tr.row-late-paid {
+  border-left: 3px solid var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+.bills-table tbody tr.row-late-paid:hover {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
 }
 
 .bills-table td {
@@ -192,11 +218,11 @@
   outline: none;
 }
 
-.payee-select {
+.combo-select {
   position: relative;
 }
 
-.payee-listbox {
+.combo-listbox {
   z-index: 20;
   max-height: 220px;
   overflow-y: auto;
@@ -207,7 +233,7 @@
   padding: 4px;
 }
 
-.payee-option {
+.combo-option {
   display: block;
   width: 100%;
   text-align: left;
@@ -224,7 +250,7 @@
   text-overflow: ellipsis;
 }
 
-.payee-option-active {
+.combo-option-active {
   background: var(--color-primary-soft);
   color: var(--color-primary);
 }

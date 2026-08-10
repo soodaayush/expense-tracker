@@ -9,7 +9,10 @@ import "./styles/grid.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: false,
+      // A couple of retries gives a query a real chance to ride out an Azure SQL serverless
+      // cold-start blip (see SlowRequestBanner) instead of failing outright on the first flaky
+      // attempt right after the database resumes.
+      retry: 2,
       refetchOnWindowFocus: false,
     },
   },

@@ -1,6 +1,9 @@
 export interface Bill {
   id: string;
+  payeeId: string;
   payee: string;
+  paymentMethodId: string | null;
+  paymentMethod: string | null;
   amount: number | null;
   dueDate: string;
   paidDate: string | null;
@@ -9,8 +12,19 @@ export interface Bill {
   updatedAt: string;
 }
 
+export interface Payee {
+  id: string;
+  name: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+}
+
 export interface BillInput {
   payee: string;
+  paymentMethod: string | null;
   amount: number | null;
   dueDate: string;
   paidDate: string | null;
@@ -21,6 +35,7 @@ export type BillPatch = Partial<BillInput>;
 
 export interface ImportRowInput {
   payee: string;
+  paymentMethod: string | null;
   amount: number | null;
   dueDate: string;
   paidDate: string | null;

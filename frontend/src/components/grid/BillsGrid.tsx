@@ -6,14 +6,16 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCreateBill, useDeleteBill, useUpdateBill } from "../../hooks/useBills";
 import { useAddPayee, usePayeesQuery } from "../../hooks/usePayees";
+import { useAddPaymentMethod, usePaymentMethodsQuery } from "../../hooks/usePaymentMethods";
+import { formatQuarterLabel, quarterKey } from "../../lib/dateUtils";
 import { sanitizeAmountInput } from "../../lib/numberInput";
 import { Bill } from "../../types/bill";
+import ComboSelect from "./ComboSelect";
 import DatePicker from "./DatePicker";
 import EditableCell from "./EditableCell";
-import PayeeSelect from "./PayeeSelect";
 import RowActions from "./RowActions";
 
 const currency = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
@@ -23,9 +25,13 @@ function isPastDue(bill: Bill): boolean {
   return bill.dueDate < new Date().toISOString().slice(0, 10);
 }
 
+function isLatePaid(bill: Bill): boolean {
+  return !!bill.paidDate && bill.paidDate > bill.dueDate;
+}
+
 type StatusFilter = "all" | "unpaid" | "paid";
 
-const emptyDraft = { payee: "", amount: "", dueDate: "", paidDate: "", notes: "" };
+const emptyDraft = { payee: "", paymentMethod: "", amount: "", dueDate: "", paidDate: "", notes: "" };
 
 export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const updateBill = useUpdateBill();
@@ -33,9 +39,14 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
   const createBill = useCreateBill();
   const payeesQuery = usePayeesQuery();
   const addPayee = useAddPayee();
-  const payeeOptions = payeesQuery.data ?? [];
+  const payeeOptions = (payeesQuery.data ?? []).map((p) => p.name);
+  const paymentMethodsQuery = usePaymentMethodsQuery();
+  const addPaymentMethod = useAddPaymentMethod();
+  const paymentMethodOptions = (paymentMethodsQuery.data ?? []).map((p) => p.name);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "dueDate", desc: true }]);
+  const [quarterIndex, setQuarterIndex] = useState(0);
+  const [focusQuarter, setFocusQuarter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [draft, setDraft] = useState(emptyDraft);
@@ -50,11 +61,50 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
     });
   }, [bills, search, statusFilter]);
 
+  // Quarters (by due date) newest-first, so index 0 always lines up with the default
+  // due-date-descending sort and with "jump back to the newest quarter" below.
+  const quarters = useMemo(() => {
+    const keys = new Set(filteredBills.map((bill) => quarterKey(bill.dueDate)));
+    return [...keys].sort().reverse();
+  }, [filteredBills]);
+
+  // Narrowing the filter/search can leave a previously-valid quarter index pointing past the
+  // end of the new result set — jump back to the newest quarter whenever what's being filtered
+  // changes.
+  useEffect(() => {
+    setQuarterIndex(0);
+  }, [search, statusFilter]);
+
+  // Deleting the last bill in a quarter (or any other shrink not caused by search/statusFilter)
+  // can also leave the index out of range — clamp it back onto the list.
+  useEffect(() => {
+    setQuarterIndex((i) => Math.min(i, Math.max(quarters.length - 1, 0)));
+  }, [quarters.length]);
+
+  // After adding a bill, jump to whichever quarter it landed in — otherwise a bill due outside
+  // the currently-viewed quarter would silently vanish from the grid the moment it's created.
+  useEffect(() => {
+    if (!focusQuarter) return;
+    const idx = quarters.indexOf(focusQuarter);
+    if (idx !== -1) {
+      setQuarterIndex(idx);
+      setFocusQuarter(null);
+    }
+  }, [focusQuarter, quarters]);
+
+  const currentQuarterKey = quarters[quarterIndex];
+  const quarterBills = useMemo(
+    () => (currentQuarterKey ? filteredBills.filter((bill) => quarterKey(bill.dueDate) === currentQuarterKey) : []),
+    [filteredBills, currentQuarterKey]
+  );
+
   function patch(id: string, field: string, value: string) {
     if (field === "amount") {
       updateBill.mutate({ id, patch: { amount: value === "" ? null : Number(value) } });
     } else if (field === "paidDate") {
       updateBill.mutate({ id, patch: { paidDate: value === "" ? null : value } });
+    } else if (field === "paymentMethod") {
+      updateBill.mutate({ id, patch: { paymentMethod: value === "" ? null : value } });
     } else {
       updateBill.mutate({ id, patch: { [field]: value } });
     }
@@ -68,12 +118,29 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
         accessorKey: "payee",
         enableSorting: true,
         cell: ({ row }) => (
-          <PayeeSelect
+          <ComboSelect
             value={row.original.payee}
             options={payeeOptions}
             label="Payee"
             onCommit={(v) => patch(row.original.id, "payee", v)}
             onAddOption={(v) => addPayee.mutate(v)}
+          />
+        ),
+      },
+      {
+        id: "paymentMethod",
+        header: "Payment Method",
+        accessorFn: (b) => b.paymentMethod ?? "",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <ComboSelect
+            value={row.original.paymentMethod ?? ""}
+            options={paymentMethodOptions}
+            placeholder="—"
+            label="Payment method"
+            allowClear
+            onCommit={(v) => patch(row.original.id, "paymentMethod", v)}
+            onAddOption={(v) => addPaymentMethod.mutate(v)}
           />
         ),
       },
@@ -149,11 +216,11 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateBill, deleteBill, payeeOptions, addPayee]
+    [updateBill, deleteBill, payeeOptions, addPayee, paymentMethodOptions, addPaymentMethod]
   );
 
   const table = useReactTable({
-    data: filteredBills,
+    data: quarterBills,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -173,11 +240,13 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
     }
     createBill.mutate({
       payee: draft.payee.trim(),
+      paymentMethod: draft.paymentMethod === "" ? null : draft.paymentMethod,
       amount: draft.amount === "" ? null : Number(draft.amount),
       dueDate: draft.dueDate,
       paidDate: draft.paidDate === "" ? null : draft.paidDate,
       notes: draft.notes,
     });
+    setFocusQuarter(quarterKey(draft.dueDate));
     setDraft(emptyDraft);
   }
 
@@ -206,7 +275,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       <div className="add-row">
         <div className="field">
           <label htmlFor="add-payee">Payee</label>
-          <PayeeSelect
+          <ComboSelect
             id="add-payee"
             label="Payee"
             value={draft.payee}
@@ -214,6 +283,19 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
             placeholder="Payee"
             onCommit={(v) => setDraft((d) => ({ ...d, payee: v }))}
             onAddOption={(v) => addPayee.mutate(v)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-payment-method">Payment method</label>
+          <ComboSelect
+            id="add-payment-method"
+            label="Payment method"
+            value={draft.paymentMethod}
+            options={paymentMethodOptions}
+            placeholder="—"
+            allowClear
+            onCommit={(v) => setDraft((d) => ({ ...d, paymentMethod: v }))}
+            onAddOption={(v) => addPaymentMethod.mutate(v)}
           />
         </div>
         <div className="field">
@@ -288,22 +370,48 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id} className={isPastDue(row.original) ? "row-past-due" : ""}>
+            <tr
+              key={row.id}
+              className={isLatePaid(row.original) ? "row-late-paid" : isPastDue(row.original) ? "row-past-due" : ""}
+            >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
               ))}
             </tr>
           ))}
-          {filteredBills.length === 0 && (
+          {quarterBills.length === 0 && (
             <tr>
               <td colSpan={columns.length} className="empty-state">
-                No bills yet.
+                {filteredBills.length === 0 ? "No bills yet." : "No bills in this quarter."}
               </td>
             </tr>
           )}
         </tbody>
       </table>
       </div>
+
+      {quarters.length > 0 && (
+        <div className="grid-pager">
+          <button
+            className="btn-link"
+            onClick={() => setQuarterIndex((i) => Math.min(i + 1, quarters.length - 1))}
+            disabled={quarterIndex >= quarters.length - 1}
+          >
+            Previous
+          </button>
+          <span>
+            {formatQuarterLabel(currentQuarterKey)} ({quarterIndex + 1} of {quarters.length} quarters ·{" "}
+            {quarterBills.length} bills)
+          </span>
+          <button
+            className="btn-link"
+            onClick={() => setQuarterIndex((i) => Math.max(i - 1, 0))}
+            disabled={quarterIndex <= 0}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import SlowRequestBanner from "./components/SlowRequestBanner";
 import { useSession } from "./hooks/useSession";
 import BillsPage from "./routes/BillsPage";
 import ImportPage from "./routes/ImportPage";
 import LoginPage from "./routes/LoginPage";
+import ManagePayeesPage from "./routes/ManagePayeesPage";
+import ManagePaymentMethodsPage from "./routes/ManagePaymentMethodsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authenticated, isLoading } = useSession();
@@ -14,25 +17,44 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <BillsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/import"
-        element={
-          <ProtectedRoute>
-            <ImportPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <SlowRequestBanner />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <BillsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/import"
+          element={
+            <ProtectedRoute>
+              <ImportPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payees"
+          element={
+            <ProtectedRoute>
+              <ManagePayeesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment-methods"
+          element={
+            <ProtectedRoute>
+              <ManagePaymentMethodsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

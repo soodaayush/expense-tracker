@@ -41,6 +41,12 @@ export default function BillsPage() {
           <Link to="/import" className="btn-link">
             Import CSV
           </Link>
+          <Link to="/payees" className="btn-link">
+            Manage Payees
+          </Link>
+          <Link to="/payment-methods" className="btn-link">
+            Manage Payment Methods
+          </Link>
           <button className="btn-link" onClick={handleAddPasskey} disabled={addingPasskey}>
             Add passkey
           </button>

@@ -24,7 +24,9 @@ export default function DatePicker({ value, onCommit, id, label, placeholder }: 
   const [open, setOpen] = useState(false);
   const selected = parseISODate(value);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected ?? new Date()));
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Popover needs the anchor as state, not just a ref — see the comment in Popover.tsx.
+  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,7 +55,13 @@ export default function DatePicker({ value, onCommit, id, label, placeholder }: 
   const grid = monthGrid(viewMonth);
 
   return (
-    <div className="date-picker" ref={containerRef}>
+    <div
+      className="date-picker"
+      ref={(el) => {
+        containerRef.current = el;
+        setAnchorEl(el);
+      }}
+    >
       <div
         id={id}
         className={`cell-display${value ? "" : " cell-empty"}`}
@@ -73,7 +81,7 @@ export default function DatePicker({ value, onCommit, id, label, placeholder }: 
         {formatDisplayDate(value) || placeholder || ""}
       </div>
 
-      <Popover anchorRef={containerRef} popoverRef={popoverRef} open={open} className="date-popover">
+      <Popover anchorEl={anchorEl} popoverRef={popoverRef} open={open} className="date-popover">
         <div role="dialog" aria-label={label ? `${label} calendar` : "Calendar"}>
           <div className="date-popover-header">
             <button

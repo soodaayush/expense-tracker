@@ -1,3 +1,5 @@
+import { beginSlowRequest, endSlowRequest, SLOW_THRESHOLD_MS } from "../lib/slowRequest";
+
 export class ApiError extends Error {
   status: number;
 
@@ -8,14 +10,26 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  let markedSlow = false;
+  const slowTimer = setTimeout(() => {
+    markedSlow = true;
+    beginSlowRequest();
+  }, SLOW_THRESHOLD_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } finally {
+    clearTimeout(slowTimer);
+    if (markedSlow) endSlowRequest();
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));

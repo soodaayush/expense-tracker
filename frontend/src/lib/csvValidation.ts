@@ -78,26 +78,26 @@ export function normalizeRow(
 
   const payee = rawPayee.trim();
   if (!payee) {
-    return { input: { payee: "", amount: null, dueDate: "", paidDate: null, notes: "" }, valid: false, error: "Payee is required" };
+    return { input: { payee: "", paymentMethod: null, amount: null, dueDate: "", paidDate: null, notes: "" }, valid: false, error: "Payee is required" };
   }
 
   const dueDate = parseDateFlexible(rawDueDate);
   if (!dueDate) {
-    return { input: { payee, amount: null, dueDate: "", paidDate: null, notes: "" }, valid: false, error: `Unrecognized due date: "${rawDueDate}"` };
+    return { input: { payee, paymentMethod: null, amount: null, dueDate: "", paidDate: null, notes: "" }, valid: false, error: `Unrecognized due date: "${rawDueDate}"` };
   }
 
   const amount = parseAmountFlexible(rawAmount);
   if (amount !== null && Number.isNaN(amount)) {
-    return { input: { payee, amount: null, dueDate, paidDate: null, notes: "" }, valid: false, error: `Unrecognized amount: "${rawAmount}"` };
+    return { input: { payee, paymentMethod: null, amount: null, dueDate, paidDate: null, notes: "" }, valid: false, error: `Unrecognized amount: "${rawAmount}"` };
   }
 
   let paidDate: string | null = null;
   if (rawPaidDate.trim()) {
     paidDate = parseDateFlexible(rawPaidDate);
     if (!paidDate) {
-      return { input: { payee, amount, dueDate, paidDate: null, notes: "" }, valid: false, error: `Unrecognized paid date: "${rawPaidDate}"` };
+      return { input: { payee, paymentMethod: null, amount, dueDate, paidDate: null, notes: "" }, valid: false, error: `Unrecognized paid date: "${rawPaidDate}"` };
     }
   }
 
-  return { input: { payee, amount, dueDate, paidDate, notes: rawNotes }, valid: true };
+  return { input: { payee, paymentMethod: null, amount, dueDate, paidDate, notes: rawNotes }, valid: true };
 }

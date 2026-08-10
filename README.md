@@ -83,7 +83,8 @@ Run through this once locally before considering a change "done" (no automated t
 6. Log back in with the same passkey (this exercises the login ceremony, not sign-up).
 7. While logged in, click "Add passkey" to register a second device on the same account.
 8. **Create a second, separate account** and confirm it sees an empty bill list, not the first account's bills — this is the core isolation guarantee, worth checking after any change touching auth or the data layer.
-9. Go to "Import CSV", upload a small sample file (include at least one blank Amount, one blank Paid Date, and one malformed date), confirm the mapping/preview screen correctly flags the bad row, and that a successful import updates the grid and totals.
+9. Go to "Import CSV", upload a small sample file (include at least one blank Amount, one blank Paid Date, and one malformed date), confirm the mapping screen auto-detects columns correctly, confirm the preview screen flags the bad row as invalid, and that clicking Import updates the grid and totals.
+10. Go to "Manage Payees", rename a payee that's used by an existing bill, and confirm the bills grid shows the new name without you having touched that bill directly. Try deleting a payee that's still in use — confirm it's blocked with a clear error. Delete a payee with no bills — confirm it's removed.
 
 ## Deploying to Azure
 
@@ -262,4 +263,4 @@ Push to `staging` to trigger the new workflow. Visit the staging URL, create a t
 
 ## Migrating your existing spreadsheet
 
-Export your Dropbox spreadsheet to CSV, then use the "Import CSV" screen in the app. It expects (and will try to auto-detect) columns for Payee, Amount, Due Date, Paid Date, and Notes — you can remap them manually if your headers differ. Rows with unparseable dates or amounts are flagged and skipped rather than blocking the whole import.
+Export your Dropbox spreadsheet to CSV, then use the "Import CSV" screen in the app. It expects (and will try to auto-detect) columns for Payee, Amount, Due Date, Paid Date, and Notes — you can remap them manually if your headers differ. The preview screen (paginated at 100 rows, so it stays responsive even on large files) flags rows with unparseable dates or amounts; they're skipped rather than blocking the whole import.

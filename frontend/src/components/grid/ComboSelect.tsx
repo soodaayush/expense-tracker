@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Popover from "./Popover";
 
-interface PayeeSelectProps {
+interface ComboSelectProps {
   value: string;
   options: string[];
   placeholder?: string;
@@ -9,9 +9,13 @@ interface PayeeSelectProps {
   label?: string;
   onCommit: (value: string) => void;
   onAddOption?: (value: string) => void;
+  // When true, committing an empty draft clears the value (onCommit("")) instead of being a
+  // no-op — for optional fields like payment method, where "unset" is a valid choice. Payee
+  // stays required, so it leaves this off.
+  allowClear?: boolean;
 }
 
-export default function PayeeSelect({
+export default function ComboSelect({
   value,
   options,
   placeholder,
@@ -19,12 +23,15 @@ export default function PayeeSelect({
   label,
   onCommit,
   onAddOption,
-}: PayeeSelectProps) {
+  allowClear = false,
+}: ComboSelectProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Popover needs the anchor as state, not just a ref — see the comment in Popover.tsx.
+  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,7 +69,10 @@ export default function PayeeSelect({
   function commit(next: string) {
     setEditing(false);
     const trimmed = next.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      if (allowClear && value) onCommit("");
+      return;
+    }
     if (trimmed !== value) {
       const isNew = !options.some((o) => o.toLowerCase() === trimmed.toLowerCase());
       onCommit(trimmed);
@@ -95,7 +105,13 @@ export default function PayeeSelect({
   }
 
   return (
-    <div className="payee-select" ref={containerRef}>
+    <div
+      className="combo-select"
+      ref={(el) => {
+        containerRef.current = el;
+        setAnchorEl(el);
+      }}
+    >
       <input
         ref={inputRef}
         id={id}
@@ -122,12 +138,12 @@ export default function PayeeSelect({
           }
         }}
       />
-      <Popover anchorRef={containerRef} popoverRef={popoverRef} open={listItems.length > 0} className="payee-listbox">
+      <Popover anchorEl={anchorEl} popoverRef={popoverRef} open={listItems.length > 0} className="combo-listbox">
         {listItems.map((item, i) => (
           <button
             key={item}
             type="button"
-            className={`payee-option${i === highlight ? " payee-option-active" : ""}`}
+            className={`combo-option${i === highlight ? " combo-option-active" : ""}`}
             onMouseDown={(e) => e.preventDefault()}
             onMouseEnter={() => setHighlight(i)}
             onClick={() => selectItem(item)}

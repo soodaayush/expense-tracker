@@ -32,7 +32,10 @@ export function validateImportRow(raw: unknown): RowValidation {
 
   const notes = typeof row.notes === "string" ? row.notes : "";
 
-  return { ok: true, row: { payee, amount, dueDate, paidDate, notes } };
+  const paymentMethod =
+    typeof row.paymentMethod === "string" && row.paymentMethod.trim() ? row.paymentMethod.trim() : null;
+
+  return { ok: true, row: { payee, paymentMethod, amount, dueDate, paidDate, notes } };
 }
 
 export type PatchValidation = { ok: true; patch: BillPatch } | { ok: false; message: string };
@@ -78,6 +81,11 @@ export function validateBillPatch(raw: unknown): PatchValidation {
 
   if ("notes" in row) {
     patch.notes = typeof row.notes === "string" ? row.notes : "";
+  }
+
+  if ("paymentMethod" in row) {
+    patch.paymentMethod =
+      typeof row.paymentMethod === "string" && row.paymentMethod.trim() ? row.paymentMethod.trim() : null;
   }
 
   return { ok: true, patch };
