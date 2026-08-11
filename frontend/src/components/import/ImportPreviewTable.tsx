@@ -28,6 +28,7 @@ export default function ImportPreviewTable({ rows }: { rows: ValidatedRow[] }) {
             <tr>
               <th>Status</th>
               <th>Payee</th>
+              <th>Payment Method</th>
               <th>Amount</th>
               <th>Due Date</th>
               <th>Paid Date</th>
@@ -39,6 +40,7 @@ export default function ImportPreviewTable({ rows }: { rows: ValidatedRow[] }) {
               <tr key={clampedPageIndex * PAGE_SIZE + i} className={r.valid ? "" : "row-invalid"}>
                 <td>{r.valid ? "✓" : r.error}</td>
                 <td>{r.input.payee}</td>
+                <td>{r.input.paymentMethod ?? ""}</td>
                 <td>{r.input.amount ?? ""}</td>
                 <td>{r.input.dueDate}</td>
                 <td>{r.input.paidDate ?? ""}</td>

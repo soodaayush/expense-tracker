@@ -33,7 +33,7 @@ type StatusFilter = "all" | "unpaid" | "paid";
 
 const emptyDraft = { payee: "", paymentMethod: "", amount: "", dueDate: "", paidDate: "", notes: "" };
 
-export default function BillsGrid({ bills }: { bills: Bill[] }) {
+export default function BillsGrid({ bills, censored = false }: { bills: Bill[]; censored?: boolean }) {
   const updateBill = useUpdateBill();
   const deleteBill = useDeleteBill();
   const createBill = useCreateBill();
@@ -250,6 +250,29 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
     setDraft(emptyDraft);
   }
 
+  const quarterPager = quarters.length > 0 && (
+    <div className="grid-pager">
+      <button
+        className="btn-link"
+        onClick={() => setQuarterIndex((i) => Math.min(i + 1, quarters.length - 1))}
+        disabled={quarterIndex >= quarters.length - 1}
+      >
+        Previous
+      </button>
+      <span>
+        {formatQuarterLabel(currentQuarterKey)} ({quarterIndex + 1} of {quarters.length} quarters ·{" "}
+        {quarterBills.length} bills)
+      </span>
+      <button
+        className="btn-link"
+        onClick={() => setQuarterIndex((i) => Math.max(i - 1, 0))}
+        disabled={quarterIndex <= 0}
+      >
+        Next
+      </button>
+    </div>
+  );
+
   return (
     <div className="grid-wrapper">
       <div className="grid-toolbar">
@@ -350,6 +373,8 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
         </div>
       )}
 
+      {quarterPager}
+
       <div className="table-scroll">
       <table className="bills-table">
         <thead>
@@ -368,7 +393,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
             </tr>
           ))}
         </thead>
-        <tbody>
+        <tbody className={censored ? "privacy-blur" : ""}>
           {table.getRowModel().rows.map((row) => (
             <tr
               key={row.id}
@@ -390,28 +415,7 @@ export default function BillsGrid({ bills }: { bills: Bill[] }) {
       </table>
       </div>
 
-      {quarters.length > 0 && (
-        <div className="grid-pager">
-          <button
-            className="btn-link"
-            onClick={() => setQuarterIndex((i) => Math.min(i + 1, quarters.length - 1))}
-            disabled={quarterIndex >= quarters.length - 1}
-          >
-            Previous
-          </button>
-          <span>
-            {formatQuarterLabel(currentQuarterKey)} ({quarterIndex + 1} of {quarters.length} quarters ·{" "}
-            {quarterBills.length} bills)
-          </span>
-          <button
-            className="btn-link"
-            onClick={() => setQuarterIndex((i) => Math.max(i - 1, 0))}
-            disabled={quarterIndex <= 0}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      {quarterPager}
     </div>
   );
 }

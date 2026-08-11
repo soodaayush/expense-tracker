@@ -15,6 +15,7 @@ export default function ImportPage() {
   const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<Record<TargetField, string | null>>({
     payee: null,
+    paymentMethod: null,
     amount: null,
     dueDate: null,
     paidDate: null,

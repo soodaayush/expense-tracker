@@ -32,11 +32,12 @@ export function parseAmountFlexible(input: string): number | null {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
-export const TARGET_FIELDS = ["payee", "amount", "dueDate", "paidDate", "notes"] as const;
+export const TARGET_FIELDS = ["payee", "paymentMethod", "amount", "dueDate", "paidDate", "notes"] as const;
 export type TargetField = (typeof TARGET_FIELDS)[number];
 
 export const FIELD_LABELS: Record<TargetField, string> = {
   payee: "Payee",
+  paymentMethod: "Payment Method",
   amount: "Amount",
   dueDate: "Due Date",
   paidDate: "Paid Date",
@@ -48,6 +49,7 @@ export function guessColumnMapping(headers: string[]): Record<TargetField, strin
   const mapping = {} as Record<TargetField, string | null>;
   const aliases: Record<TargetField, string[]> = {
     payee: ["payee", "name", "vendor"],
+    paymentMethod: ["paymentmethod", "paymethod", "method", "payment"],
     amount: ["amount", "amt"],
     dueDate: ["duedate", "due"],
     paidDate: ["paiddate", "paid"],
@@ -71,10 +73,13 @@ export function normalizeRow(
   mapping: Record<TargetField, string | null>
 ): ValidatedRow {
   const rawPayee = mapping.payee ? raw[mapping.payee] ?? "" : "";
+  const rawPaymentMethod = mapping.paymentMethod ? raw[mapping.paymentMethod] ?? "" : "";
   const rawAmount = mapping.amount ? raw[mapping.amount] ?? "" : "";
   const rawDueDate = mapping.dueDate ? raw[mapping.dueDate] ?? "" : "";
   const rawPaidDate = mapping.paidDate ? raw[mapping.paidDate] ?? "" : "";
   const rawNotes = mapping.notes ? raw[mapping.notes] ?? "" : "";
+
+  const paymentMethod = rawPaymentMethod.trim() || null;
 
   const payee = rawPayee.trim();
   if (!payee) {
@@ -95,9 +100,9 @@ export function normalizeRow(
   if (rawPaidDate.trim()) {
     paidDate = parseDateFlexible(rawPaidDate);
     if (!paidDate) {
-      return { input: { payee, paymentMethod: null, amount, dueDate, paidDate: null, notes: "" }, valid: false, error: `Unrecognized paid date: "${rawPaidDate}"` };
+      return { input: { payee, paymentMethod, amount, dueDate, paidDate: null, notes: "" }, valid: false, error: `Unrecognized paid date: "${rawPaidDate}"` };
     }
   }
 
-  return { input: { payee, paymentMethod: null, amount, dueDate, paidDate, notes: rawNotes }, valid: true };
+  return { input: { payee, paymentMethod, amount, dueDate, paidDate, notes: rawNotes }, valid: true };
 }
