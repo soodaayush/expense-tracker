@@ -157,15 +157,14 @@ export async function createBill(userId: string, input: BillInput): Promise<Bill
     .input("id", sql.UniqueIdentifier, id)
     .input("userId", sql.UniqueIdentifier, userId)
     .input("payeeId", sql.UniqueIdentifier, payee.id)
-    .input("payee", sql.NVarChar(400), payee.name)
     .input("paymentMethodId", sql.UniqueIdentifier, paymentMethodId)
     .input("amount", sql.Decimal(12, 2), input.amount)
     .input("dueDate", sql.Date, parseDateOnly(input.dueDate))
     .input("paidDate", sql.Date, input.paidDate ? parseDateOnly(input.paidDate) : null)
     .input("notes", sql.NVarChar(sql.MAX), input.notes ?? "")
     .query(
-      `INSERT INTO dbo.Bills (id, user_id, payee_id, payee, payment_method_id, amount, due_date, paid_date, notes)
-       VALUES (@id, @userId, @payeeId, @payee, @paymentMethodId, @amount, @dueDate, @paidDate, @notes)`
+      `INSERT INTO dbo.Bills (id, user_id, payee_id, payment_method_id, amount, due_date, paid_date, notes)
+       VALUES (@id, @userId, @payeeId, @paymentMethodId, @amount, @dueDate, @paidDate, @notes)`
     );
   return getBillById(userId, id);
 }
@@ -261,7 +260,6 @@ export async function bulkCreateBills(userId: string, rows: BillInput[]): Promis
     billsTable.columns.add("id", sql.UniqueIdentifier, { nullable: false });
     billsTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
     billsTable.columns.add("payee_id", sql.UniqueIdentifier, { nullable: false });
-    billsTable.columns.add("payee", sql.NVarChar(400), { nullable: false });
     billsTable.columns.add("payment_method_id", sql.UniqueIdentifier, { nullable: true });
     billsTable.columns.add("amount", sql.Decimal(12, 2), { nullable: true });
     billsTable.columns.add("due_date", sql.Date, { nullable: false });
@@ -277,7 +275,6 @@ export async function bulkCreateBills(userId: string, rows: BillInput[]): Promis
         randomUUID(),
         userId,
         payeeId,
-        trimmed,
         paymentMethodId,
         row.amount,
         parseDateOnly(row.dueDate),
@@ -306,9 +303,8 @@ export async function updateBill(userId: string, id: string, patch: BillPatch): 
   const setClauses: string[] = ["updated_at = @updatedAt"];
   if ("payee" in patch && patch.payee) {
     const payee = await findOrCreatePayeeId(userId, patch.payee);
-    setClauses.push("payee_id = @payeeId", "payee = @payee");
+    setClauses.push("payee_id = @payeeId");
     request.input("payeeId", sql.UniqueIdentifier, payee.id);
-    request.input("payee", sql.NVarChar(400), payee.name);
   }
   if ("paymentMethod" in patch) {
     const paymentMethodId = patch.paymentMethod
