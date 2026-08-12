@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./styles/theme.css";
 import "./styles/grid.css";
+import "./styles/reports.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -5,6 +5,7 @@ import BillsGrid from "../components/grid/BillsGrid";
 import TotalsBar from "../components/grid/TotalsBar";
 import { useSession } from "../hooks/useSession";
 import { useBillsQuery } from "../hooks/useBills";
+import { usePrivacyMode } from "../hooks/usePrivacyMode";
 import { billsToCsv, downloadCsv } from "../lib/csvExport";
 
 export default function BillsPage() {
@@ -13,15 +14,7 @@ export default function BillsPage() {
   const billsQuery = useBillsQuery();
   const [addingPasskey, setAddingPasskey] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [privacyMode, setPrivacyMode] = useState(() => localStorage.getItem("privacyMode") === "1");
-
-  function togglePrivacyMode() {
-    setPrivacyMode((prev) => {
-      const next = !prev;
-      localStorage.setItem("privacyMode", next ? "1" : "0");
-      return next;
-    });
-  }
+  const { privacyMode, toggle: togglePrivacyMode } = usePrivacyMode();
 
   async function handleLogout() {
     await logout();
@@ -54,6 +47,9 @@ export default function BillsPage() {
       <header className="page-header">
         <h1>Bill Tracker{displayName ? ` — ${displayName}` : ""}</h1>
         <nav className="page-nav">
+          <Link to="/reports" className="btn-link">
+            Reports
+          </Link>
           <Link to="/import" className="btn-link">
             Import CSV
           </Link>
