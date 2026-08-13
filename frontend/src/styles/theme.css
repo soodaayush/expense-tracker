@@ -28,6 +28,20 @@
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
+  /* Categorical chart palette — validated 8-hue order (dataviz skill default), fixed order,
+     never cycled or reassigned. Passes lightness/chroma/CVD/normal-vision checks against this
+     theme's --color-surface (#ffffff) via scripts/validate_palette.js. */
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
+  --chart-series-3: #1baf7a;
+  --chart-series-4: #eda100;
+  --chart-series-5: #e87ba4;
+  --chart-series-6: #008300;
+  --chart-series-7: #4a3aa7;
+  --chart-series-8: #e34948;
+  --chart-grid: var(--color-border);
+  --chart-axis: var(--color-border-strong);
+
   color-scheme: light;
 }
 
@@ -46,6 +60,17 @@
     --color-primary-hover: #6366f1;
     --color-primary-soft: #262a45;
     --color-primary-contrast: #0f1020;
+
+    /* Same 8-hue order, dark-mode steps — validated against this theme's dark
+       --color-surface (#1a1c22). */
+    --chart-series-1: #3987e5;
+    --chart-series-2: #d95926;
+    --chart-series-3: #199e70;
+    --chart-series-4: #c98500;
+    --chart-series-5: #d55181;
+    --chart-series-6: #008300;
+    --chart-series-7: #9085e9;
+    --chart-series-8: #e66767;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);

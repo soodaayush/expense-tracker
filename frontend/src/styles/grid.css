@@ -379,6 +379,13 @@
   padding: 40px;
 }
 
+.privacy-blur {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+  transition: filter 150ms ease;
+}
+
 .import-preview table td {
   padding: 8px 12px;
 }

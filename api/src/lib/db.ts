@@ -157,15 +157,14 @@ export async function createBill(userId: string, input: BillInput): Promise<Bill
     .input("id", sql.UniqueIdentifier, id)
     .input("userId", sql.UniqueIdentifier, userId)
     .input("payeeId", sql.UniqueIdentifier, payee.id)
-    .input("payee", sql.NVarChar(400), payee.name)
     .input("paymentMethodId", sql.UniqueIdentifier, paymentMethodId)
     .input("amount", sql.Decimal(12, 2), input.amount)
     .input("dueDate", sql.Date, parseDateOnly(input.dueDate))
     .input("paidDate", sql.Date, input.paidDate ? parseDateOnly(input.paidDate) : null)
     .input("notes", sql.NVarChar(sql.MAX), input.notes ?? "")
     .query(
-      `INSERT INTO dbo.Bills (id, user_id, payee_id, payee, payment_method_id, amount, due_date, paid_date, notes)
-       VALUES (@id, @userId, @payeeId, @payee, @paymentMethodId, @amount, @dueDate, @paidDate, @notes)`
+      `INSERT INTO dbo.Bills (id, user_id, payee_id, payment_method_id, amount, due_date, paid_date, notes)
+       VALUES (@id, @userId, @payeeId, @paymentMethodId, @amount, @dueDate, @paidDate, @notes)`
     );
   return getBillById(userId, id);
 }
@@ -217,12 +216,51 @@ export async function bulkCreateBills(userId: string, rows: BillInput[]): Promis
       }
     }
 
+    // Same find-or-create-by-name dance as payees above, but keyed off the rows that actually
+    // specify a payment method — most import rows won't, so this stays empty for those.
+    const paymentMethodNameByKey = new Map<string, string>();
+    for (const row of rows) {
+      if (!row.paymentMethod) continue;
+      const trimmed = row.paymentMethod.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (!paymentMethodNameByKey.has(key)) paymentMethodNameByKey.set(key, trimmed);
+    }
+
+    const paymentMethodIdByKey = new Map<string, string>();
+    if (paymentMethodNameByKey.size > 0) {
+      const names = [...paymentMethodNameByKey.values()];
+      const existingRequest = new sql.Request(transaction).input("userId", sql.UniqueIdentifier, userId);
+      names.forEach((name, i) => existingRequest.input(`pm${i}`, sql.NVarChar(200), name));
+      const existing = await existingRequest.query(
+        `SELECT id, name FROM dbo.PaymentMethods WHERE user_id = @userId AND name IN (${names
+          .map((_, i) => `@pm${i}`)
+          .join(", ")})`
+      );
+      for (const r of existing.recordset) paymentMethodIdByKey.set((r.name as string).toLowerCase(), r.id as string);
+
+      const newKeys = [...paymentMethodNameByKey.keys()].filter((key) => !paymentMethodIdByKey.has(key));
+      if (newKeys.length > 0) {
+        const paymentMethodTable = new sql.Table("dbo.PaymentMethods");
+        paymentMethodTable.create = false;
+        paymentMethodTable.columns.add("id", sql.UniqueIdentifier, { nullable: false });
+        paymentMethodTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
+        paymentMethodTable.columns.add("name", sql.NVarChar(200), { nullable: false });
+        for (const key of newKeys) {
+          const id = randomUUID();
+          paymentMethodTable.rows.add(id, userId, paymentMethodNameByKey.get(key));
+          paymentMethodIdByKey.set(key, id);
+        }
+        await new sql.Request(transaction).bulk(paymentMethodTable);
+      }
+    }
+
     const billsTable = new sql.Table("dbo.Bills");
     billsTable.create = false;
     billsTable.columns.add("id", sql.UniqueIdentifier, { nullable: false });
     billsTable.columns.add("user_id", sql.UniqueIdentifier, { nullable: false });
     billsTable.columns.add("payee_id", sql.UniqueIdentifier, { nullable: false });
-    billsTable.columns.add("payee", sql.NVarChar(400), { nullable: false });
+    billsTable.columns.add("payment_method_id", sql.UniqueIdentifier, { nullable: true });
     billsTable.columns.add("amount", sql.Decimal(12, 2), { nullable: true });
     billsTable.columns.add("due_date", sql.Date, { nullable: false });
     billsTable.columns.add("paid_date", sql.Date, { nullable: true });
@@ -230,11 +268,14 @@ export async function bulkCreateBills(userId: string, rows: BillInput[]): Promis
     for (const row of rows) {
       const trimmed = row.payee.trim();
       const payeeId = idByKey.get(trimmed.toLowerCase())!;
+      const paymentMethodId = row.paymentMethod?.trim()
+        ? paymentMethodIdByKey.get(row.paymentMethod.trim().toLowerCase())!
+        : null;
       billsTable.rows.add(
         randomUUID(),
         userId,
         payeeId,
-        trimmed,
+        paymentMethodId,
         row.amount,
         parseDateOnly(row.dueDate),
         row.paidDate ? parseDateOnly(row.paidDate) : null,
@@ -262,9 +303,8 @@ export async function updateBill(userId: string, id: string, patch: BillPatch): 
   const setClauses: string[] = ["updated_at = @updatedAt"];
   if ("payee" in patch && patch.payee) {
     const payee = await findOrCreatePayeeId(userId, patch.payee);
-    setClauses.push("payee_id = @payeeId", "payee = @payee");
+    setClauses.push("payee_id = @payeeId");
     request.input("payeeId", sql.UniqueIdentifier, payee.id);
-    request.input("payee", sql.NVarChar(400), payee.name);
   }
   if ("paymentMethod" in patch) {
     const paymentMethodId = patch.paymentMethod

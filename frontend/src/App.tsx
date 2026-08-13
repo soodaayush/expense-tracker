@@ -1,14 +1,17 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import SlowRequestBanner from "./components/SlowRequestBanner";
+import { useIdleLogout } from "./hooks/useIdleLogout";
 import { useSession } from "./hooks/useSession";
 import BillsPage from "./routes/BillsPage";
 import ImportPage from "./routes/ImportPage";
 import LoginPage from "./routes/LoginPage";
 import ManagePayeesPage from "./routes/ManagePayeesPage";
 import ManagePaymentMethodsPage from "./routes/ManagePaymentMethodsPage";
+import ReportsPage from "./routes/ReportsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authenticated, isLoading } = useSession();
+  useIdleLogout(authenticated);
 
   if (isLoading) return <div className="page-loading">Loading…</div>;
   if (!authenticated) return <Navigate to="/login" replace />;
@@ -26,6 +29,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <BillsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute>
+              <ReportsPage />
             </ProtectedRoute>
           }
         />

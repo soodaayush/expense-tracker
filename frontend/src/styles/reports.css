@@ -1,0 +1,276 @@
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-tile {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-tile-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-tile-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stat-tile-sub {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
+.report-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.report-card h3 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.report-empty {
+  color: var(--color-text-faint);
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.reports-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.reports-columns .report-card {
+  margin-bottom: 0;
+}
+
+/* --- Spending trend chart --- */
+
+.trend-scroll {
+  overflow-x: auto;
+}
+
+.chart-gridline {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-baseline {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  fill: var(--color-text-faint);
+  font-size: 0.68rem;
+  font-family: inherit;
+}
+
+.chart-area {
+  fill: var(--chart-series-1);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--chart-series-1);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-dot {
+  fill: var(--chart-series-1);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.chart-point-label {
+  fill: var(--color-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.chart-crosshair {
+  stroke: var(--color-text-faint);
+  stroke-width: 1;
+}
+
+.chart-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.chart-readout strong {
+  font-size: 1.1rem;
+}
+
+.chart-readout span {
+  color: var(--color-text-muted);
+}
+
+/* --- Category bar lists --- */
+
+.bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-track {
+  height: 20px;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--chart-series-1);
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-value {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+  min-width: 76px;
+}
+
+.report-table-toggle {
+  margin-top: 14px;
+}
+
+.report-table-toggle summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.report-table {
+  margin-top: 10px;
+}
+
+.report-table td:nth-child(2),
+.report-table td:nth-child(3) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Payment timeliness --- */
+
+.timeliness-track {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.timeliness-on-time {
+  background: var(--color-success);
+}
+
+.timeliness-late {
+  background: var(--color-danger);
+}
+
+.timeliness-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.timeliness-legend strong {
+  margin-left: auto;
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.legend-swatch-good {
+  background: var(--color-success);
+}
+
+.legend-swatch-critical {
+  background: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .reports-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .report-card {
+    padding: 14px 16px;
+  }
+
+  .bar-row {
+    grid-template-columns: 90px 1fr auto;
+  }
+
+  .timeliness-legend strong {
+    margin-left: 0;
+    width: 100%;
+  }
+}

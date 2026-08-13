@@ -106,6 +106,14 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Bills_PayeeId' AND obj
   CREATE INDEX IX_Bills_PayeeId ON dbo.Bills(payee_id);
 GO
 
+-- Bills.payee (the original NOT NULL text column) is now fully superseded by payee_id — every
+-- read already goes through BILL_SELECT's JOIN on Payees, not this column, but it was still
+-- NOT NULL so every insert/update was forced to keep writing a stale copy of the name into it.
+-- Drop it now that payee_id is locked down as the sole source of truth.
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Bills') AND name = 'payee')
+  ALTER TABLE dbo.Bills DROP COLUMN payee;
+GO
+
 IF OBJECT_ID('dbo.PaymentMethods', 'U') IS NULL
 BEGIN
   CREATE TABLE dbo.PaymentMethods (
