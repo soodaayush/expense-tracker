@@ -55,6 +55,9 @@ export default function BillsPage() {
           <Link to="/reports" className="btn-link">
             Reports
           </Link>
+          <Link to="/notifications" className="btn-link">
+            Notifications
+          </Link>
           <button
             className={`btn-link${privacyMode ? " btn-chip-active" : ""}`}
             onClick={togglePrivacyMode}
