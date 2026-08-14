@@ -1,5 +1,5 @@
 {
-  "name": "bill-tracker-api",
+  "name": "bill-tracker-notifications-worker",
   "version": "1.0.0",
   "private": true,
   "main": "dist/src/index.js",
@@ -15,8 +15,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@azure/communication-email": "^1.1.0",
     "@azure/functions": "^4.5.1",
-    "@simplewebauthn/server": "^13.1.1",
     "mssql": "^11.0.1"
   },
   "devDependencies": {

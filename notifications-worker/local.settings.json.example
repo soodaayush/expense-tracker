@@ -9,9 +9,9 @@
     "SQL_USER": "sa",
     "SQL_PASSWORD": "LocalDev!Passw0rd",
     "SQL_TRUST_SERVER_CERT": "true",
-    "RP_ID": "localhost",
     "ORIGIN": "http://localhost:4280",
-    "SESSION_SECRET": "replace-with-any-long-random-string-for-local-dev"
+    "ACS_CONNECTION_STRING": "endpoint=https://<your-acs-resource>.communication.azure.com/;accesskey=<key>",
+    "NOTIFICATION_SENDER_EMAIL": "DoNotReply@<your-managed-domain>.azurecomm.net"
   },
   "Host": {
     "CORS": "*"

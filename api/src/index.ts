@@ -21,4 +21,3 @@ import "./functions/paymentMethodsUpdate";
 import "./functions/paymentMethodsDelete";
 import "./functions/notificationPreferencesGet";
 import "./functions/notificationPreferencesUpdate";
-import "./functions/notificationsSend";

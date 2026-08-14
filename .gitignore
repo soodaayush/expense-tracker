@@ -6,7 +6,8 @@ frontend/vite.config.js
 frontend/vite.config.d.ts
 
 # secrets — never commit
-api/local.settings.json
+# Unqualified (not "api/...") so it covers every Functions project (api/, notifications-worker/, …).
+local.settings.json
 .env
 .env.local
 
