@@ -74,18 +74,36 @@ GO
 
 -- Backfill: create any Payees rows missing for existing Bills.payee values. Scoped to
 -- payee_id IS NULL, so once every bill is backfilled a rerun touches zero rows.
-INSERT INTO dbo.Payees (id, user_id, name)
-SELECT NEWID(), x.user_id, x.payee
-FROM (SELECT DISTINCT user_id, payee FROM dbo.Bills WHERE payee_id IS NULL) x
-WHERE NOT EXISTS (SELECT 1 FROM dbo.Payees p WHERE p.user_id = x.user_id AND p.name = x.payee);
+-- Wrapped in EXEC(N'...') rather than a plain IF/BEGIN/END: SQL Server compiles a whole batch
+-- up front, including statements inside an untaken IF branch, and INSERT/UPDATE need every
+-- column resolved against the table's *current* schema at compile time — so once a prior run
+-- has dropped payee (below), a plain guarded INSERT here still fails to compile, IF or no IF.
+-- Dynamic SQL defers parsing the column reference until the string actually executes, by which
+-- point the IF has already gated whether that happens at all.
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Bills') AND name = 'payee')
+BEGIN
+  EXEC(N'
+    INSERT INTO dbo.Payees (id, user_id, name)
+    SELECT NEWID(), x.user_id, x.payee
+    FROM (SELECT DISTINCT user_id, payee FROM dbo.Bills WHERE payee_id IS NULL) x
+    WHERE NOT EXISTS (SELECT 1 FROM dbo.Payees p WHERE p.user_id = x.user_id AND p.name = x.payee);
+  ');
+END
 GO
 
--- Backfill: point payee_id at the now-guaranteed-to-exist matching Payees row.
-UPDATE b
-SET b.payee_id = p.id
-FROM dbo.Bills b
-JOIN dbo.Payees p ON p.user_id = b.user_id AND p.name = b.payee
-WHERE b.payee_id IS NULL;
+-- Backfill: point payee_id at the now-guaranteed-to-exist matching Payees row. Same
+-- dynamic-SQL reason as above — b.payee stops resolving once the column is gone, and a plain
+-- IF/BEGIN/END guard doesn't stop the batch from trying to compile it anyway.
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Bills') AND name = 'payee')
+BEGIN
+  EXEC(N'
+    UPDATE b
+    SET b.payee_id = p.id
+    FROM dbo.Bills b
+    JOIN dbo.Payees p ON p.user_id = b.user_id AND p.name = b.payee
+    WHERE b.payee_id IS NULL;
+  ');
+END
 GO
 
 -- Lock it down: NOT NULL, then the FK. If the backfill above somehow missed a row, this fails
@@ -160,4 +178,38 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Credentials_UserId' AND object_id = OBJECT_ID('dbo.Credentials'))
   CREATE INDEX IX_Credentials_UserId ON dbo.Credentials(user_id);
+GO
+
+-- Due-date reminder emails. One row per user (not a separate id) since it's a 1:1 settings
+-- record; email stays NULL and enabled stays 0 until the user actually turns notifications on.
+IF OBJECT_ID('dbo.NotificationPreferences', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.NotificationPreferences (
+    user_id              UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_NotificationPreferences_Users REFERENCES dbo.Users(user_id) ON DELETE CASCADE,
+    email                NVARCHAR(320)    NULL,
+    enabled              BIT              NOT NULL DEFAULT 0,
+    lead_days            INT              NOT NULL DEFAULT 3,
+    send_hour            TINYINT          NOT NULL DEFAULT 9,
+    send_minute          TINYINT          NOT NULL DEFAULT 0,
+    -- IANA name (e.g. "America/Halifax"), not a fixed UTC offset, so the send time stays correct
+    -- across Daylight Saving transitions without needing its own migration twice a year.
+    time_zone            NVARCHAR(100)    NOT NULL DEFAULT 'America/Halifax',
+    -- The last local calendar date (in time_zone) a digest check completed for this user — lets
+    -- the every-15-minutes timer recognize "already handled today" without sending duplicates,
+    -- regardless of which 15-minute tick actually lands inside the user's chosen send window.
+    last_sent_local_date DATE             NULL,
+    created_at           DATETIME2(3)     NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at           DATETIME2(3)     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_NotificationPreferences PRIMARY KEY (user_id),
+    CONSTRAINT CK_NotificationPreferences_LeadDays CHECK (lead_days >= 0 AND lead_days <= 90),
+    CONSTRAINT CK_NotificationPreferences_SendHour CHECK (send_hour >= 0 AND send_hour <= 23),
+    CONSTRAINT CK_NotificationPreferences_SendMinute CHECK (send_minute >= 0 AND send_minute <= 59)
+  );
+END
+GO
+
+-- One reminder ever per bill (not a log table with a type column) since v1 has exactly one
+-- notification kind — a bill re-entering the lead-time window after this is set never re-fires.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Bills') AND name = 'reminder_sent_at')
+  ALTER TABLE dbo.Bills ADD reminder_sent_at DATETIME2(3) NULL;
 GO
