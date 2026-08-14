@@ -31,7 +31,13 @@ export default function Popover({ anchorEl, popoverRef, open, className, childre
       const rect = anchorEl!.getBoundingClientRect();
       const viewportGutter = 8;
       const top = Math.min(rect.bottom + 4, window.innerHeight - viewportGutter);
-      const left = Math.min(rect.left, window.innerWidth - viewportGutter);
+      let left = Math.min(rect.left, window.innerWidth - viewportGutter);
+      // Clamp against the popover's own rendered width too, not just the anchor's left edge —
+      // a trigger near the right edge of the viewport (e.g. a nav menu button) would otherwise
+      // let wide popover content overflow off-screen to the right.
+      const popoverWidth = popoverRef.current?.offsetWidth;
+      if (popoverWidth) left = Math.min(left, window.innerWidth - popoverWidth - viewportGutter);
+      left = Math.max(left, viewportGutter);
       setStyle({ position: "fixed", top, left, minWidth: rect.width });
     }
 

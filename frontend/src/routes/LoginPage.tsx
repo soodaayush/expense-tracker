@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { loginWithPasskey, signup } from "../api/auth";
+import { describeAuthError, loginWithPasskey, signup } from "../api/auth";
 import { useSession } from "../hooks/useSession";
 
 export default function LoginPage() {
@@ -22,7 +22,7 @@ export default function LoginPage() {
       await refresh();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(describeAuthError(err));
     } finally {
       setBusy(false);
     }
@@ -36,7 +36,7 @@ export default function LoginPage() {
       await refresh();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign up failed");
+      setError(describeAuthError(err));
     } finally {
       setBusy(false);
     }

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { addPasskey, logout } from "../api/auth";
+import { createAddPasskeyCredential, describeAuthError, fetchAddPasskeyOptions, logout, verifyAddPasskey } from "../api/auth";
 import BillsGrid from "../components/grid/BillsGrid";
 import TotalsBar from "../components/grid/TotalsBar";
+import NavMenu from "../components/NavMenu";
 import { useSession } from "../hooks/useSession";
 import { useBillsQuery } from "../hooks/useBills";
 import { usePrivacyMode } from "../hooks/usePrivacyMode";
@@ -29,14 +30,18 @@ export default function BillsPage() {
   }
 
   async function handleAddPasskey() {
-    const deviceLabel = window.prompt("Name this device (e.g. Phone, Laptop):") ?? undefined;
     setAddingPasskey(true);
     setMessage(null);
     try {
-      await addPasskey({ deviceLabel });
+      // The WebAuthn ceremony runs immediately after the click, before anything can block and
+      // burn through the browser's transient-activation window — see fetchAddPasskeyOptions.
+      const options = await fetchAddPasskeyOptions();
+      const response = await createAddPasskeyCredential(options);
+      const deviceLabel = window.prompt("Name this device (e.g. Phone, Laptop):") ?? undefined;
+      await verifyAddPasskey(response, deviceLabel);
       setMessage("Passkey added.");
     } catch (err) {
-      setMessage(err instanceof Error ? `Failed: ${err.message}` : "Failed to add passkey");
+      setMessage(`Failed: ${describeAuthError(err)}`);
     } finally {
       setAddingPasskey(false);
     }
@@ -50,22 +55,6 @@ export default function BillsPage() {
           <Link to="/reports" className="btn-link">
             Reports
           </Link>
-          <Link to="/import" className="btn-link">
-            Import CSV
-          </Link>
-          <Link to="/payees" className="btn-link">
-            Manage Payees
-          </Link>
-          <Link to="/payment-methods" className="btn-link">
-            Manage Payment Methods
-          </Link>
-          <button
-            className="btn-link"
-            onClick={handleExport}
-            disabled={!billsQuery.data || billsQuery.data.length === 0}
-          >
-            Export CSV
-          </button>
           <button
             className={`btn-link${privacyMode ? " btn-chip-active" : ""}`}
             onClick={togglePrivacyMode}
@@ -74,12 +63,32 @@ export default function BillsPage() {
           >
             {privacyMode ? "🙈 Unhide" : "🙈 Privacy"}
           </button>
-          <button className="btn-link" onClick={handleAddPasskey} disabled={addingPasskey}>
-            Add passkey
-          </button>
-          <button className="btn-link" onClick={handleLogout}>
-            Log out
-          </button>
+          <NavMenu label="Menu ▾">
+            <Link to="/import" className="nav-menu-item">
+              Import CSV
+            </Link>
+            <button
+              type="button"
+              className="nav-menu-item"
+              onClick={handleExport}
+              disabled={!billsQuery.data || billsQuery.data.length === 0}
+            >
+              Export CSV
+            </button>
+            <Link to="/payees" className="nav-menu-item">
+              Manage Payees
+            </Link>
+            <Link to="/payment-methods" className="nav-menu-item">
+              Manage Payment Methods
+            </Link>
+            <div className="nav-menu-divider" />
+            <button type="button" className="nav-menu-item" onClick={handleAddPasskey} disabled={addingPasskey}>
+              Add passkey
+            </button>
+            <button type="button" className="nav-menu-item" onClick={handleLogout}>
+              Log out
+            </button>
+          </NavMenu>
         </nav>
       </header>
 

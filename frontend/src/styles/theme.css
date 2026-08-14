@@ -133,6 +133,56 @@ h3 {
   align-items: center;
 }
 
+.nav-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.nav-menu-list {
+  z-index: 30;
+  min-width: 200px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+}
+
+.nav-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--color-text);
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.nav-menu-item:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.nav-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: none;
+  color: var(--color-text);
+}
+
+.nav-menu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 6px 4px;
+}
+
 .page-message {
   color: var(--color-primary);
   background: var(--color-primary-soft);
