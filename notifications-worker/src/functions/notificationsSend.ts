@@ -27,8 +27,8 @@ function localDateTime(timeZone: string, now: Date): { localDate: string; hour: 
 
 // Fires once local time has reached (not just hit exactly) the user's preferred send time and
 // they haven't already been checked today — "at or past" rather than an exact-minute match
-// means this reliably catches the target time within 15 minutes regardless of which minute the
-// user picked, and "haven't already sent today" is what keeps a 15-minute-interval timer from
+// means this reliably catches the target time within one minute of a user's chosen time (the
+// timer runs every minute — see below), and "haven't already sent today" is what keeps it from
 // re-firing for the rest of that day once it has.
 function isDueForCheck(user: NotificationPreferencesRow, now: Date): { localDate: string; due: boolean } {
   const { localDate, hour, minute } = localDateTime(user.timeZone, now);
@@ -38,7 +38,10 @@ function isDueForCheck(user: NotificationPreferencesRow, now: Date): { localDate
 }
 
 app.timer("notificationsSend", {
-  schedule: "0 */15 * * * *",
+  // Every minute rather than every 15 — someone who sets 9:00 AM means 9:00 AM, not "sometime
+  // in the next quarter hour." Still nothing against the Consumption plan's free execution
+  // grant at this scale (~43,000/month vs. the 1,000,000 free).
+  schedule: "0 * * * * *",
   handler: async (_myTimer: Timer, context: InvocationContext) => {
     const now = new Date();
     const users = await listEnabledNotificationPreferences();
