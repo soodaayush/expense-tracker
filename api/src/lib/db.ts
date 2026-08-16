@@ -696,8 +696,13 @@ export async function saveNotificationPreferences(
        USING (SELECT @userId AS user_id) AS src
        ON target.user_id = src.user_id
        WHEN MATCHED THEN
+         -- Resetting last_sent_local_date here (not just on the initial insert) matters: without
+         -- it, changing your send time after already getting today's digest would leave you
+         -- silently blocked until tomorrow, since the timer's "already checked today" guard has
+         -- no idea a fresh save should count as a reason to reconsider you today.
          UPDATE SET email = @email, enabled = @enabled, lead_days = @leadDays, send_hour = @sendHour,
-                    send_minute = @sendMinute, time_zone = @timeZone, updated_at = @updatedAt
+                    send_minute = @sendMinute, time_zone = @timeZone, updated_at = @updatedAt,
+                    last_sent_local_date = NULL
        WHEN NOT MATCHED THEN
          INSERT (user_id, email, enabled, lead_days, send_hour, send_minute, time_zone)
          VALUES (@userId, @email, @enabled, @leadDays, @sendHour, @sendMinute, @timeZone);`
