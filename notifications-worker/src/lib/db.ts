@@ -111,20 +111,28 @@ export async function listEnabledNotificationPreferences(): Promise<Notification
   }));
 }
 
-// Unpaid bills due within leadDays that haven't been reminded about yet — the exact set a
-// digest email needs. Reuses BILL_SELECT so the email can show payee/payment-method names.
+// A bill overdue by more than this is treated as "too stale to bother mentioning" rather than
+// "still coming due" — without a floor here, due_date <= today + leadDays has no lower bound at
+// all, so a bill from years ago qualifies exactly as well as one due tomorrow.
+const MAX_OVERDUE_DAYS = 30;
+
+// Unpaid bills due within leadDays (and not more than MAX_OVERDUE_DAYS past due) that haven't
+// been reminded about yet — the exact set a digest email needs. Reuses BILL_SELECT so the email
+// can show payee/payment-method names.
 export async function findBillsNeedingReminder(userId: string, leadDays: number): Promise<Bill[]> {
   const pool = await getPool();
   const result = await pool
     .request()
     .input("userId", sql.UniqueIdentifier, userId)
     .input("leadDays", sql.Int, leadDays)
+    .input("maxOverdueDays", sql.Int, MAX_OVERDUE_DAYS)
     .query(
       `${BILL_SELECT}
        WHERE b.user_id = @userId
          AND b.paid_date IS NULL
          AND b.reminder_sent_at IS NULL
          AND b.due_date <= DATEADD(day, @leadDays, CAST(SYSUTCDATETIME() AS DATE))
+         AND b.due_date >= DATEADD(day, -@maxOverdueDays, CAST(SYSUTCDATETIME() AS DATE))
        ORDER BY b.due_date ASC`
     );
   return result.recordset.map(toBill);
