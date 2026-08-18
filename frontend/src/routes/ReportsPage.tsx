@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import CategoryBarList from "../components/reports/CategoryBarList";
+import LateByPayeeList from "../components/reports/LateByPayeeList";
+import RisingCostsList from "../components/reports/RisingCostsList";
 import SpendingTrendChart from "../components/reports/SpendingTrendChart";
 import StatTile from "../components/reports/StatTile";
 import TimelinessBar from "../components/reports/TimelinessBar";
 import { useBillsQuery } from "../hooks/useBills";
 import { usePrivacyMode } from "../hooks/usePrivacyMode";
-import { computeReportStats, topCategoriesWithOther } from "../lib/reportStats";
+import { computeReportStats, formatAvgDaysDiff, topCategoriesWithOther } from "../lib/reportStats";
 
 const currency = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 
@@ -20,6 +22,7 @@ export default function ReportsPage() {
   const stats = useMemo(() => computeReportStats(bills), [bills]);
   const payeeBars = useMemo(() => topCategoriesWithOther(stats.byPayee, MAX_BARS), [stats.byPayee]);
   const methodBars = useMemo(() => topCategoriesWithOther(stats.byPaymentMethod, MAX_BARS), [stats.byPaymentMethod]);
+  const lateByPayeeBars = useMemo(() => stats.lateByPayee.slice(0, MAX_BARS), [stats.lateByPayee]);
 
   return (
     <div className="page">
@@ -64,11 +67,26 @@ export default function ReportsPage() {
                 stats.timeliness.onTimeCount + stats.timeliness.lateCount === 1 ? "" : "s"
               }`}
             />
+            <StatTile label="Avg. payment timing" value={formatAvgDaysDiff(stats.timeliness.avgDaysDiff)} />
+            <StatTile
+              label="Top-3 concentration"
+              value={`${Math.round(stats.concentrationTop3Pct * 100)}%`}
+              sub="of total spend"
+            />
+            <StatTile
+              label="On-time streak"
+              value={`${stats.onTimeStreak} bill${stats.onTimeStreak === 1 ? "" : "s"}`}
+              sub="consecutive, most recent first"
+            />
           </div>
 
-          <SpendingTrendChart data={stats.monthlySpend} />
+          <SpendingTrendChart data={stats.monthlySpend} monthOverMonthChangePct={stats.monthOverMonthChangePct} />
 
           <TimelinessBar stats={stats.timeliness} />
+
+          <LateByPayeeList payees={lateByPayeeBars} full={stats.lateByPayee} />
+
+          <RisingCostsList costs={stats.risingCosts} />
 
           <div className="reports-columns">
             <CategoryBarList
