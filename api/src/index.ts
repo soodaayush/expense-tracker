@@ -19,3 +19,5 @@ import "./functions/paymentMethodsList";
 import "./functions/paymentMethodsCreate";
 import "./functions/paymentMethodsUpdate";
 import "./functions/paymentMethodsDelete";
+import "./functions/notificationPreferencesGet";
+import "./functions/notificationPreferencesUpdate";

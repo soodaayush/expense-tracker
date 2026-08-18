@@ -1,6 +1,6 @@
 import sql, { ConnectionPool } from "mssql";
 import { randomUUID } from "node:crypto";
-import { Bill, BillInput, BillPatch, Payee, PaymentMethod } from "../shared/types";
+import { Bill, BillInput, BillPatch, NotificationPreferences, Payee, PaymentMethod } from "../shared/types";
 
 export class NotFoundError extends Error {
   statusCode = 404;
@@ -640,3 +640,73 @@ export async function listCredentialsForUser(userId: string): Promise<Credential
     .query("SELECT * FROM dbo.Credentials WHERE user_id = @userId");
   return result.recordset.map(toCredential);
 }
+
+// --- Notification preferences ---
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  email: null,
+  enabled: false,
+  leadDays: 3,
+  sendHour: 9,
+  sendMinute: 0,
+  timeZone: "America/Halifax",
+};
+
+// No row yet just means "never configured" — the defaults above, not an error. A row is only
+// ever created the first time a user actually saves preferences (see saveNotificationPreferences).
+export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .query(
+      "SELECT email, enabled, lead_days, send_hour, send_minute, time_zone FROM dbo.NotificationPreferences WHERE user_id = @userId"
+    );
+  const row = result.recordset[0];
+  if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
+  return {
+    email: row.email,
+    enabled: !!row.enabled,
+    leadDays: row.lead_days,
+    sendHour: row.send_hour,
+    sendMinute: row.send_minute,
+    timeZone: row.time_zone,
+  };
+}
+
+// Full-row upsert rather than a SET-clause patch (like updateBill) — preferences are a single
+// small settings record, not worth the field-by-field diffing machinery Bills needs.
+export async function saveNotificationPreferences(
+  userId: string,
+  prefs: NotificationPreferences
+): Promise<NotificationPreferences> {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .input("email", sql.NVarChar(320), prefs.email)
+    .input("enabled", sql.Bit, prefs.enabled)
+    .input("leadDays", sql.Int, prefs.leadDays)
+    .input("sendHour", sql.TinyInt, prefs.sendHour)
+    .input("sendMinute", sql.TinyInt, prefs.sendMinute)
+    .input("timeZone", sql.NVarChar(100), prefs.timeZone)
+    .input("updatedAt", sql.DateTime2, new Date())
+    .query(
+      `MERGE dbo.NotificationPreferences AS target
+       USING (SELECT @userId AS user_id) AS src
+       ON target.user_id = src.user_id
+       WHEN MATCHED THEN
+         -- Resetting last_sent_local_date here (not just on the initial insert) matters: without
+         -- it, changing your send time after already getting today's digest would leave you
+         -- silently blocked until tomorrow, since the timer's "already checked today" guard has
+         -- no idea a fresh save should count as a reason to reconsider you today.
+         UPDATE SET email = @email, enabled = @enabled, lead_days = @leadDays, send_hour = @sendHour,
+                    send_minute = @sendMinute, time_zone = @timeZone, updated_at = @updatedAt,
+                    last_sent_local_date = NULL
+       WHEN NOT MATCHED THEN
+         INSERT (user_id, email, enabled, lead_days, send_hour, send_minute, time_zone)
+         VALUES (@userId, @email, @enabled, @leadDays, @sendHour, @sendMinute, @timeZone);`
+    );
+  return prefs;
+}
+

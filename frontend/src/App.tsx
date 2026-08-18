@@ -7,6 +7,7 @@ import ImportPage from "./routes/ImportPage";
 import LoginPage from "./routes/LoginPage";
 import ManagePayeesPage from "./routes/ManagePayeesPage";
 import ManagePaymentMethodsPage from "./routes/ManagePaymentMethodsPage";
+import NotificationsPage from "./routes/NotificationsPage";
 import ReportsPage from "./routes/ReportsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -61,6 +62,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ManagePaymentMethodsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

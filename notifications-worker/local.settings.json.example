@@ -1,0 +1,19 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "SQL_SERVER": "localhost",
+    "SQL_PORT": "14330",
+    "SQL_DATABASE": "BillTracker",
+    "SQL_USER": "sa",
+    "SQL_PASSWORD": "LocalDev!Passw0rd",
+    "SQL_TRUST_SERVER_CERT": "true",
+    "ORIGIN": "http://localhost:4280",
+    "ACS_CONNECTION_STRING": "endpoint=https://<your-acs-resource>.communication.azure.com/;accesskey=<key>",
+    "NOTIFICATION_SENDER_EMAIL": "DoNotReply@<your-managed-domain>.azurecomm.net"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}

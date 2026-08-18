@@ -256,7 +256,77 @@
   background: var(--color-danger);
 }
 
+/* --- Settings pages (Notifications) --- */
+
+.settings-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.settings-field input,
+.settings-field select {
+  padding: 9px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.settings-field input:focus-visible,
+.settings-field select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.settings-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.settings-checkbox-field input {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-faint);
+  margin: 0;
+  line-height: 1.4;
+}
+
 @media (max-width: 640px) {
+  .settings-card {
+    max-width: none;
+    padding: 18px;
+  }
+
   .reports-grid {
     grid-template-columns: repeat(2, 1fr);
   }
