@@ -366,6 +366,22 @@
   outline-offset: 1px;
 }
 
+.settings-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-inline-field input {
+  width: 90px;
+  flex: 0 0 auto;
+}
+
+.settings-inline-field span {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
 .settings-checkbox-field {
   display: flex;
   align-items: center;
