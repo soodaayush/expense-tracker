@@ -44,13 +44,19 @@ export default function NotificationsPage() {
       return;
     }
 
+    const sendMinute = Number(minuteStr);
+    if (sendMinute !== 0) {
+      setMessage({ text: "Send time must be on the hour.", error: true });
+      return;
+    }
+
     updatePreferences.mutate(
       {
         email: trimmedEmail === "" ? null : trimmedEmail,
         enabled,
         leadDays,
         sendHour: Number(hourStr),
-        sendMinute: Number(minuteStr),
+        sendMinute,
         timeZone,
       },
       {
@@ -93,20 +99,29 @@ export default function NotificationsPage() {
           </div>
 
           <div className="settings-field">
-            <label htmlFor="notif-lead-days">Remind me this many days before a bill is due</label>
-            <input
-              id="notif-lead-days"
-              type="number"
-              min={0}
-              max={90}
-              value={leadDays}
-              onChange={(e) => setLeadDays(Number(e.target.value))}
-            />
+            <label htmlFor="notif-lead-days">Recurring reminder T - x (days)</label>
+            <div className="settings-inline-field">
+              <input
+                id="notif-lead-days"
+                type="number"
+                min={0}
+                max={90}
+                value={leadDays}
+                onChange={(e) => setLeadDays(Number(e.target.value))}
+              />
+              <span>days</span>
+            </div>
           </div>
 
           <div className="settings-field">
             <label htmlFor="notif-send-time">Send time</label>
-            <input id="notif-send-time" type="time" value={sendTime} onChange={(e) => setSendTime(e.target.value)} />
+            <input
+              id="notif-send-time"
+              type="time"
+              step={3600}
+              value={sendTime}
+              onChange={(e) => setSendTime(e.target.value)}
+            />
           </div>
 
           <div className="settings-field">

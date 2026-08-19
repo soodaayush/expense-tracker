@@ -18,7 +18,12 @@ const TOP_PADDING = 28;
 const PLOT_HEIGHT = 180;
 const AXIS_LABEL_HEIGHT = 26;
 
-export default function SpendingTrendChart({ data }: { data: MonthlySpend[] }) {
+interface SpendingTrendChartProps {
+  data: MonthlySpend[];
+  monthOverMonthChangePct?: number | null;
+}
+
+export default function SpendingTrendChart({ data, monthOverMonthChangePct }: SpendingTrendChartProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   if (data.length === 0) {
@@ -46,7 +51,15 @@ export default function SpendingTrendChart({ data }: { data: MonthlySpend[] }) {
 
   return (
     <div className="report-card">
-      <h3>Spending over time</h3>
+      <div className="report-card-header">
+        <h3>Spending over time</h3>
+        {monthOverMonthChangePct != null && (
+          <span className="trend-delta">
+            {monthOverMonthChangePct >= 0 ? "▲" : "▼"} {Math.abs(Math.round(monthOverMonthChangePct * 100))}% vs last
+            month
+          </span>
+        )}
+      </div>
       <div className="trend-scroll">
         <svg width={width} height={height} role="img" aria-label="Total amount paid per month">
           {ticks.map((t) => (

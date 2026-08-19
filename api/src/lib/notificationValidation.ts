@@ -47,8 +47,11 @@ export function validateNotificationPreferencesPatch(raw: unknown): PatchValidat
 
   if ("sendMinute" in row) {
     const sendMinute = Number(row.sendMinute);
-    if (!Number.isInteger(sendMinute) || sendMinute < 0 || sendMinute > 59) {
-      return { ok: false, message: "sendMinute must be an integer between 0 and 59" };
+    // Restricted to exactly on-the-hour — the notifications-worker timer only checks every 60
+    // minutes (matching this), so anything else would silently wait up to an hour past whatever
+    // was actually requested.
+    if (sendMinute !== 0) {
+      return { ok: false, message: "sendMinute must be 0" };
     }
     patch.sendMinute = sendMinute;
   }
