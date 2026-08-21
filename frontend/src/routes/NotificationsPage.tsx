@@ -5,6 +5,17 @@ import { useNotificationPreferencesQuery, useUpdateNotificationPreferences } fro
 const TIME_ZONES =
   typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : ["UTC"];
 
+// The only send times the notifications-worker timer is meant to be picked for — kept as
+// "HH:MM" strings so this drops straight into the existing <select> value/onChange without
+// needing a separate numeric representation.
+const SEND_TIME_OPTIONS = [
+  { value: "09:00", label: "9:00 AM" },
+  { value: "12:00", label: "12:00 PM" },
+  { value: "15:00", label: "3:00 PM" },
+  { value: "18:00", label: "6:00 PM" },
+];
+const DEFAULT_SEND_TIME = SEND_TIME_OPTIONS[0].value;
+
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -29,7 +40,12 @@ export default function NotificationsPage() {
     setEmail(p.email ?? "");
     setEnabled(p.enabled);
     setLeadDays(p.leadDays);
-    setSendTime(`${pad(p.sendHour)}:${pad(p.sendMinute)}`);
+    // A previously-saved time from before send times were restricted to these four slots
+    // (e.g. an old free-form value) won't match any <option> — fall back rather than leave the
+    // select showing nothing selected. Saving is still an explicit action, so this can't
+    // silently overwrite anything until the user actually hits Save.
+    const savedTime = `${pad(p.sendHour)}:${pad(p.sendMinute)}`;
+    setSendTime(SEND_TIME_OPTIONS.some((o) => o.value === savedTime) ? savedTime : DEFAULT_SEND_TIME);
     setTimeZone(p.timeZone);
     setLoaded(true);
   }, [preferencesQuery.data, loaded]);
@@ -45,8 +61,8 @@ export default function NotificationsPage() {
     }
 
     const sendMinute = Number(minuteStr);
-    if (sendMinute !== 0) {
-      setMessage({ text: "Send time must be on the hour.", error: true });
+    if (!SEND_TIME_OPTIONS.some((o) => o.value === sendTime)) {
+      setMessage({ text: "Send time must be one of the available options.", error: true });
       return;
     }
 
@@ -115,13 +131,13 @@ export default function NotificationsPage() {
 
           <div className="settings-field">
             <label htmlFor="notif-send-time">Send time</label>
-            <input
-              id="notif-send-time"
-              type="time"
-              step={3600}
-              value={sendTime}
-              onChange={(e) => setSendTime(e.target.value)}
-            />
+            <select id="notif-send-time" value={sendTime} onChange={(e) => setSendTime(e.target.value)}>
+              {SEND_TIME_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="settings-field">
