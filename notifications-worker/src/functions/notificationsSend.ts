@@ -27,9 +27,11 @@ function localDateTime(timeZone: string, now: Date): { localDate: string; hour: 
 
 // Fires once local time has reached (not just hit exactly) the user's preferred send time and
 // they haven't already been checked today — "at or past" rather than an exact-minute match
-// means this reliably catches the target time within one check of a user's chosen time (up to
-// ~4 hours late in the worst case — see the timer schedule below), and "haven't already sent
-// today" is what keeps it from re-firing for the rest of that day once it has.
+// means this reliably catches the target time at the next check regardless of how the fixed
+// UTC schedule below happens to land for a given user's timezone (worst case ~15h, across the
+// overnight gap between the last check of one day and the first of the next — see the timer
+// schedule below), and "haven't already sent today" is what keeps it from re-firing for the
+// rest of that day once it has.
 function isDueForCheck(user: NotificationPreferencesRow, now: Date): { localDate: string; due: boolean } {
   const { localDate, hour, minute } = localDateTime(user.timeZone, now);
   const nowMinutes = hour * 60 + minute;
@@ -38,14 +40,21 @@ function isDueForCheck(user: NotificationPreferencesRow, now: Date): { localDate
 }
 
 app.timer("notificationsSend", {
-  // Every 4 hours, not hourly — hourly checks against a serverless free-tier SQL database
-  // repeatedly interrupted its auto-pause (each check either kept it resumed or forced a fresh
-  // resume-from-pause), which is what actually burned through the monthly free vCore-second
-  // allowance in days rather than lasting the month. Widening the gap between checks gives the
-  // database real stretches to stay paused, at the cost of a wider (~4h) worst-case delivery
-  // delay — a trade worth making since function executions themselves were never the
-  // bottleneck (six checks/day is nothing against the Consumption plan's free grant either way).
-  schedule: "0 0 */4 * * *",
+  // Exactly 4 checks a day — at 12:00, 15:00, 18:00, 21:00 UTC, the equivalent of 9am/12pm/3pm/
+  // 6pm Atlantic Daylight Time (UTC-3) — instead of hourly or a generic */4 grid. Fewer checks
+  // means the free-tier serverless SQL database gets longer real stretches to stay auto-paused,
+  // which is what actually matters for the monthly free vCore-second budget (repeated hourly
+  // checks were what burned through it in days rather than lasting the month).
+  //
+  // This is a fixed UTC schedule, so it's anchored to *a* timezone, not *the* user's — it won't
+  // perfectly track DST (Atlantic time falls back to UTC-4 for AST in winter, shifting the
+  // nominal alignment here by an hour) and it won't line up with 9/12/15/18 for someone in a
+  // very different timezone (e.g. 6pm Pacific lands in the ~15h overnight gap between the
+  // 21:00 UTC check and the next day's 12:00 UTC one). Neither matters for correctness:
+  // isDueForCheck recomputes each user's own local time fresh every run regardless of which UTC
+  // moment this fires at, so nothing is ever missed or double-sent — worst case is just delay,
+  // bounded by how far someone's chosen local time sits from these four fixed UTC moments.
+  schedule: "0 0 12,15,18,21 * * *",
   handler: async (_myTimer: Timer, context: InvocationContext) => {
     const now = new Date();
     const users = await listEnabledNotificationPreferences();
