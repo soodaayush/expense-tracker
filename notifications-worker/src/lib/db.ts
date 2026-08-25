@@ -44,6 +44,25 @@ export function getPool(): Promise<ConnectionPool> {
   return poolPromise;
 }
 
+// Unlike api/'s db.ts, which deliberately keeps its pool open to reuse across frequent HTTP
+// requests, this worker only runs a few times a day and has nothing to gain from that — while
+// an open connection sitting idle between invocations, for however long the Function App host
+// process happens to stay warm, actively blocks Azure SQL serverless auto-pause the entire
+// time. Call this at the end of every run (see notificationsSend.ts) so the database is free to
+// pause as soon as this invocation's actual work is done, not whenever the host eventually
+// decides to spin down.
+export async function closePool(): Promise<void> {
+  if (!poolPromise) return;
+  try {
+    const pool = await poolPromise;
+    await pool.close();
+  } catch (err) {
+    console.error("failed to close mssql pool", err);
+  } finally {
+    poolPromise = null;
+  }
+}
+
 // Dates round-trip as "YYYY-MM-DD" strings; SQL's DATE columns have no time component, so
 // constructing/reading at UTC midnight is safe and stable.
 function parseDateOnly(value: string): Date {
