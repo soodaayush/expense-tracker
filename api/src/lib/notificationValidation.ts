@@ -3,10 +3,10 @@ import { NotificationPreferences, NotificationPreferencesPatch } from "../shared
 // Deliberately loose — "just check if an email looks like an email," not full RFC 5322.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// The only hours a send time can land on — must match the options offered in the frontend's
-// NotificationsPage.tsx select. This is the real enforcement point: the dropdown alone can't
-// stop someone from posting an arbitrary sendHour straight to this endpoint.
-const ALLOWED_SEND_HOURS = [9, 12, 15, 18];
+// 9am is the only send hour now — no longer user-configurable in the frontend (see
+// NotificationsPage.tsx's FIXED_SEND_HOUR), but this is the real enforcement point regardless,
+// since the UI alone can't stop someone from posting an arbitrary sendHour straight here.
+const ALLOWED_SEND_HOURS = [9];
 
 export type PatchValidation =
   | { ok: true; patch: NotificationPreferencesPatch }
