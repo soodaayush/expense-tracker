@@ -3,6 +3,11 @@ import { NotificationPreferences, NotificationPreferencesPatch } from "../shared
 // Deliberately loose — "just check if an email looks like an email," not full RFC 5322.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 9am is the only send hour now — no longer user-configurable in the frontend (see
+// NotificationsPage.tsx's FIXED_SEND_HOUR), but this is the real enforcement point regardless,
+// since the UI alone can't stop someone from posting an arbitrary sendHour straight here.
+const ALLOWED_SEND_HOURS = [9];
+
 export type PatchValidation =
   | { ok: true; patch: NotificationPreferencesPatch }
   | { ok: false; message: string };
@@ -39,8 +44,8 @@ export function validateNotificationPreferencesPatch(raw: unknown): PatchValidat
 
   if ("sendHour" in row) {
     const sendHour = Number(row.sendHour);
-    if (!Number.isInteger(sendHour) || sendHour < 0 || sendHour > 23) {
-      return { ok: false, message: "sendHour must be an integer between 0 and 23" };
+    if (!ALLOWED_SEND_HOURS.includes(sendHour)) {
+      return { ok: false, message: `sendHour must be one of ${ALLOWED_SEND_HOURS.join(", ")}` };
     }
     patch.sendHour = sendHour;
   }
