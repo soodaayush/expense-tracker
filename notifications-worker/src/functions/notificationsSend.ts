@@ -1,5 +1,6 @@
 import { app, InvocationContext, Timer } from "@azure/functions";
 import {
+  closePool,
   findBillsNeedingReminder,
   listEnabledNotificationPreferences,
   markBillsReminded,
@@ -62,27 +63,34 @@ app.timer("notificationsSend", {
   schedule: "0 0 13 * * *",
   handler: async (_myTimer: Timer, context: InvocationContext) => {
     const now = new Date();
-    const users = await listEnabledNotificationPreferences();
+    try {
+      const users = await listEnabledNotificationPreferences();
 
-    for (const user of users) {
-      try {
-        const { localDate, due } = isDueForCheck(user, now);
-        if (!due) continue;
+      for (const user of users) {
+        try {
+          const { localDate, due } = isDueForCheck(user, now);
+          if (!due) continue;
 
-        const bills = await findBillsNeedingReminder(user.userId, user.leadDays);
-        if (bills.length > 0 && user.email) {
-          await sendReminderDigest(user.email, bills);
-          await markBillsReminded(
-            user.userId,
-            bills.map((b) => b.id)
-          );
+          const bills = await findBillsNeedingReminder(user.userId, user.leadDays);
+          if (bills.length > 0 && user.email) {
+            await sendReminderDigest(user.email, bills);
+            await markBillsReminded(
+              user.userId,
+              bills.map((b) => b.id)
+            );
+          }
+          await markNotificationCheckDone(user.userId, localDate);
+        } catch (err) {
+          // One user's failure (bad email, transient ACS error) shouldn't block everyone else's
+          // reminders — log and move on rather than letting the whole run throw.
+          context.error(`notificationsSend failed for user ${user.userId}`, err);
         }
-        await markNotificationCheckDone(user.userId, localDate);
-      } catch (err) {
-        // One user's failure (bad email, transient ACS error) shouldn't block everyone else's
-        // reminders — log and move on rather than letting the whole run throw.
-        context.error(`notificationsSend failed for user ${user.userId}`, err);
       }
+    } finally {
+      // Always close, even if listEnabledNotificationPreferences itself failed before the loop
+      // — an open connection left behind after an error blocks auto-pause exactly the same as
+      // one left behind after success.
+      await closePool();
     }
   },
 });

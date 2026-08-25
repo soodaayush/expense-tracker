@@ -15,6 +15,13 @@ const queryClient = new QueryClient({
       // attempt right after the database resumes.
       retry: 2,
       refetchOnWindowFocus: false,
+      // Without this, every route change remounts a query and — since the default staleTime is
+      // 0 — refetches from the database immediately, even when nothing has changed since the
+      // last fetch. Every mutation already explicitly invalidates the queries it affects, so
+      // this only suppresses *redundant* refetches, not real ones; it directly cuts how often
+      // the database gets touched during ordinary browsing (Bills ↔ Reports ↔ Notifications),
+      // which matters for staying inside the free-tier serverless vCore-second budget.
+      staleTime: 5 * 60 * 1000,
     },
   },
 });
