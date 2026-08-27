@@ -292,7 +292,14 @@
   display: grid;
   grid-template-columns: 120px 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rising-cost-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .rising-cost-name {
@@ -321,6 +328,12 @@
   padding: 3px 8px;
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.rising-cost-trend {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
 }
 
 /* --- Settings pages (Notifications) --- */
