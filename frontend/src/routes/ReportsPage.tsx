@@ -8,7 +8,7 @@ import StatTile from "../components/reports/StatTile";
 import TimelinessBar from "../components/reports/TimelinessBar";
 import { useBillsQuery } from "../hooks/useBills";
 import { usePrivacyMode } from "../hooks/usePrivacyMode";
-import { computeReportStats, formatAvgDaysDiff, topCategoriesWithOther } from "../lib/reportStats";
+import { computeReportStats, formatAvgDaysDiff, formatDateShort, topCategoriesWithOther } from "../lib/reportStats";
 
 const currency = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 
@@ -75,8 +75,14 @@ export default function ReportsPage() {
             />
             <StatTile
               label="On-time streak"
-              value={`${stats.onTimeStreak} bill${stats.onTimeStreak === 1 ? "" : "s"}`}
-              sub="consecutive, most recent first"
+              value={`${stats.onTimeStreak.count} bill${stats.onTimeStreak.count === 1 ? "" : "s"}`}
+              sub={
+                stats.onTimeStreak.startDate && stats.onTimeStreak.endDate
+                  ? stats.onTimeStreak.startDate === stats.onTimeStreak.endDate
+                    ? formatDateShort(stats.onTimeStreak.startDate)
+                    : `${formatDateShort(stats.onTimeStreak.startDate)} – ${formatDateShort(stats.onTimeStreak.endDate)}`
+                  : "No streak yet"
+              }
             />
           </div>
 

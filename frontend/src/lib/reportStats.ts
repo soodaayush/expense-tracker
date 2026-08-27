@@ -30,6 +30,15 @@ export interface RisingCost {
   previousAmount: number; // average of this payee's bills before the most recent one
   recentAmount: number; // most recent bill's amount
   increasePct: number; // e.g. 0.19 = 19% above the historical average
+  historicalStartDate: string; // due date of the earliest bill the historical average covers
+  historicalEndDate: string; // due date of the latest bill the historical average covers
+  recentDate: string; // due date of the most recent (elevated) bill
+}
+
+export interface OnTimeStreak {
+  count: number;
+  startDate: string | null; // due date of the oldest bill in the current streak
+  endDate: string | null; // due date of the most recent bill in the current streak
 }
 
 export interface ReportStats {
@@ -45,7 +54,7 @@ export interface ReportStats {
   concentrationTop3Pct: number; // 0..1, share of total spend from the top 3 payees
   monthOverMonthChangePct: number | null; // null when there's under 2 months of data to compare
   risingCosts: RisingCost[];
-  onTimeStreak: number; // consecutive on-time payments, most recent backwards
+  onTimeStreak: OnTimeStreak;
 }
 
 // Plain "YYYY-MM-DD" date-math — UTC-anchored so it's just counting calendar days, not
@@ -158,7 +167,15 @@ export function computeReportStats(bills: Bill[]): ReportStats {
     const recentAmount = recent.amount as number;
     const increasePct = (recentAmount - historicalAvg) / historicalAvg;
     if (increasePct >= RISING_COST_THRESHOLD) {
-      risingCosts.push({ name, previousAmount: historicalAvg, recentAmount, increasePct });
+      risingCosts.push({
+        name,
+        previousAmount: historicalAvg,
+        recentAmount,
+        increasePct,
+        historicalStartDate: historical[0].dueDate,
+        historicalEndDate: historical[historical.length - 1].dueDate,
+        recentDate: recent.dueDate,
+      });
     }
   }
   risingCosts.sort((a, b) => b.increasePct - a.increasePct);
@@ -170,11 +187,19 @@ export function computeReportStats(bills: Bill[]): ReportStats {
   const paidBillsByRecency = bills
     .filter((b) => b.paidDate)
     .sort((a, b) => (b.paidDate as string).localeCompare(a.paidDate as string));
-  let onTimeStreak = 0;
+  let onTimeStreakCount = 0;
+  let onTimeStreakStart: string | null = null;
+  const onTimeStreakEnd = paidBillsByRecency[0]?.paidDate ?? null;
   for (const bill of paidBillsByRecency) {
     if (daysBetween(bill.dueDate, bill.paidDate as string) > 0) break;
-    onTimeStreak += 1;
+    onTimeStreakCount += 1;
+    onTimeStreakStart = bill.paidDate as string;
   }
+  const onTimeStreak: OnTimeStreak = {
+    count: onTimeStreakCount,
+    startDate: onTimeStreakCount > 0 ? onTimeStreakStart : null,
+    endDate: onTimeStreakCount > 0 ? onTimeStreakEnd : null,
+  };
 
   return {
     totalPaid,
@@ -223,6 +248,13 @@ export function niceMax(value: number): number {
   const residual = value / magnitude;
   const niceResidual = residual > 5 ? 10 : residual > 2 ? 5 : residual > 1 ? 2 : 1;
   return niceResidual * magnitude;
+}
+
+export function formatDateShort(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, month - 1, day))
+  );
 }
 
 export function formatMonthShort(monthKey: string): string {
