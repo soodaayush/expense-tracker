@@ -5,6 +5,10 @@ export default function Footer() {
       <a href="https://www.aayushsood.com/" target="_blank" rel="noopener noreferrer">
         Aayush Sood
       </a>
+      <span aria-hidden="true"> · </span>
+      <a href="https://github.com/soodaayush/expense-tracker" target="_blank" rel="noopener noreferrer">
+        GitHub
+      </a>
     </footer>
   );
 }
