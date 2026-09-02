@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import Footer from "./components/Footer";
 import SlowRequestBanner from "./components/SlowRequestBanner";
 import { useIdleLogout } from "./hooks/useIdleLogout";
 import { useSession } from "./hooks/useSession";
@@ -75,6 +76,7 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Footer />
     </>
   );
 }
