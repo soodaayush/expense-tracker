@@ -1,110 +1,134 @@
+<p align="center">
+  <img src="docs/screenshot.png" alt="Bill Tracker screenshot" width="900">
+</p>
+
 # Bill Tracker
 
-A multi-tenant bill/expense tracker — a spreadsheet replacement with a spreadsheet-like editable grid, CSV import for migrating existing data, and **passkey-only accounts** (no passwords, no email/username — an account is just a passkey). Anyone can create their own account with open sign-up; each account's bills/payees are completely private and isolated from every other account. Built to run on Azure for close to $0/month.
+A bill tracker I built to replace the spreadsheet I was using to keep track of what I owe and when. It has an editable grid that feels like a spreadsheet, CSV import and export, reports, email reminders, and passkey-only accounts, so there are no passwords and no emails to sign up. It runs on Azure and is designed to cost close to nothing.
 
-- **Frontend**: React + TypeScript (Vite SPA), TanStack Table/Query
-- **Backend**: Azure Functions v4 (Node + TypeScript), deployed as Azure Static Web Apps "managed functions"
-- **Storage**: Azure SQL Database (Always Free serverless tier — genuinely $0, not just cheap), every account-owned table scoped by account id for isolation
-- **Auth**: WebAuthn passkeys via `@simplewebauthn`, self-issued signed session cookie — no third-party auth vendor, no email/username collected anywhere
+## Features
+
+- Editable bills grid with inline editing, quarter switcher, and totals
+- Payees and payment methods you can rename, and a rename shows up on every bill that uses it
+- CSV import with column mapping and a preview that flags bad rows, plus CSV export
+- Reports: spending over time, breakdowns by payee and payment method, on-time rate, average days early or late, late payments by payee, spending concentration, month over month change, a watchlist of payees whose bills are creeping up, and your longest current on-time streak
+- Email reminders sent once a day at 9am in your timezone, with a digest of bills due soon
+- Privacy mode that blurs amounts, and automatic logout after a period of inactivity
+- Passkey accounts (WebAuthn). Sign-up is open, and each account's data is isolated from every other account
+
+## Stack
+
+- **Frontend:** React, TypeScript, Vite, TanStack Table and Query
+- **API:** Azure Functions v4 (Node and TypeScript), deployed as Azure Static Web Apps managed functions
+- **Notifications:** a separate Azure Functions app with a timer trigger, sending mail through Azure Communication Services
+- **Database:** Azure SQL Database, serverless free tier
+- **Auth:** passkeys through `@simplewebauthn`, with a signed session cookie. No third-party auth service
+
+The notifications worker is its own project because Static Web Apps managed functions only support HTTP triggers, so a timer has to live somewhere else.
 
 ## Project layout
 
 ```
-frontend/   Vite + React SPA (app_location for SWA)
-api/        Azure Functions v4 API (api_location for SWA)
+frontend/              Vite + React SPA
+api/                   HTTP API (Static Web Apps managed functions)
+notifications-worker/  Timer-triggered function that sends reminder emails
+sql/                   Schema, migration script, and local docker-compose
 ```
 
-`frontend/public/staticwebapp.config.json` is the real SWA routing config — Vite copies it into `frontend/dist/` on every build, which is where SWA expects to find it.
+`frontend/public/staticwebapp.config.json` is the routing config for Static Web Apps. Vite copies it into `frontend/dist/` on build, which is where Static Web Apps looks for it.
 
-## Local development
+## Running it locally
 
-### Prerequisites
-- **Node.js 20 LTS specifically.** Azure Functions Core Tools v4 does not yet support newer non-LTS Node versions (e.g. 22 odd/24) — if `npm run dev` fails with "Found Azure Functions Core Tools v4 which is incompatible with your current Node.js version," this is why. A `.nvmrc` is included, so any of the tools below will pick up "20" automatically inside the project directory:
-  - **Windows**: [nvm-windows / nvm4w](https://github.com/coreybutler/nvm-windows) — `nvm install 20 && nvm use 20`
-  - **macOS / Linux**: [nvm](https://github.com/nvm-sh/nvm) — `nvm install && nvm use` (reads `.nvmrc` automatically), or Homebrew (`brew install node@20`), or [`n`](https://github.com/tj/n)
-- A platform authenticator for passkeys — Windows Hello, Touch ID/Face ID (macOS), or a security key/phone acting as a roaming authenticator on Linux — or a browser with a virtual authenticator for testing.
-- **Docker**, for a local SQL Server container — there's no free emulator for Azure SQL the way Azurite emulates Table Storage, so local dev runs a real SQL Server engine in a container instead.
-- This project has only been run/verified on Windows so far; the code itself is plain Node.js/TypeScript with no OS-specific APIs, but if you hit anything platform-specific on macOS/Linux (tooling install quirks, path issues), it's worth a quick sanity check the first time through.
+### What you need
 
-### First-time setup
+- **Node 20.** Azure Functions Core Tools v4 doesn't work with newer non-LTS Node versions, and you'll get an "incompatible Node.js version" error if you try. There's an `.nvmrc`, so `nvm install && nvm use` picks up the right version.
+- **Docker**, for a local SQL Server container. There's no emulator for Azure SQL, so local development runs a real SQL Server in Docker.
+- **A passkey authenticator.** Touch ID, Windows Hello, a phone, or a security key all work. A browser with a virtual authenticator also works for testing.
+
+I've run this on Windows and macOS.
+
+### Setup
 
 ```bash
 npm install --prefix frontend
 npm install --prefix api
-npm install   # installs root dev tools: swa-cli, azurite, mssql
+npm install   # root dev tools: swa-cli, azurite, mssql
 
 cp api/local.settings.json.example api/local.settings.json
 ```
 
-Edit `api/local.settings.json` and set `SESSION_SECRET` to any local value (doesn't need to be secure for local dev, just non-empty) — the `SQL_*` values in the example file already match the Docker container below, no changes needed there for local dev.
+In `api/local.settings.json`, set `SESSION_SECRET` to anything non-empty. The `SQL_*` values already match the Docker container.
 
-### Running
+### Start everything
 
-You need three terminals the first time (two after that, until the schema changes):
+You need three terminals the first time, and two after that.
 
 ```bash
-# Terminal 1 — Functions host bookkeeping storage emulator (unrelated to app data)
+# 1. Storage emulator. The Functions host needs it for its own bookkeeping.
 npm run dev:azurite
 
-# Terminal 2 — local SQL Server (first time only, then it just needs to be running)
+# 2. Local SQL Server (only the first time), then apply the schema
 npm run dev:sql
-npm run db:migrate   # applies sql/schema.sql — safe to re-run anytime
+npm run db:migrate   # safe to re-run
 
-# Terminal 3 — SPA + API behind a single unified origin
+# 3. Frontend and API behind one origin
 npm run dev
 ```
 
-`npm run dev` starts the Vite dev server and the Functions host together, proxied through `http://localhost:4280`. **Always use port 4280 in the browser**, not 5173 or 7071 directly — WebAuthn's origin check will fail otherwise, since `RP_ID`/`ORIGIN` in `local.settings.json` are configured for `localhost:4280`.
+Open **http://localhost:4280**, not 5173 or 7071. The WebAuthn origin check is configured for port 4280 and fails on anything else.
 
-`npm run dev:sql:down` stops the SQL container (data persists in its Docker volume — `npm run dev:sql` next time picks up where you left off, no need to re-migrate unless the volume was removed).
+`npm run dev:sql:down` stops the SQL container. Your data stays in the Docker volume.
 
-**If `npm run db:migrate` fails with "Login failed for user 'sa'"**, and you have a native SQL Server instance already installed on this machine (check Windows Services for `MSSQLSERVER`, or the equivalent on macOS/Linux), it's almost certainly squatting on port 1433 and intercepting the connection before it reaches the container — the login failure is a red herring, not a real password problem. This is why the container maps to host port **14330**, not 1433 (see `sql/docker-compose.yml`); if you've changed that mapping, make sure `SQL_PORT` in `local.settings.json` still matches.
+If `npm run db:migrate` fails with "Login failed for user 'sa'" and you also have SQL Server installed natively, that install is probably sitting on port 1433 and answering before the container does. The container is mapped to port 14330 for this reason. If you change the mapping, update `SQL_PORT` to match.
+
+### Running the notifications worker locally
+
+```bash
+cp notifications-worker/local.settings.json.example notifications-worker/local.settings.json
+```
+
+Fill in `ACS_CONNECTION_STRING` and `NOTIFICATION_SENDER_EMAIL` from an Azure Communication Services resource with an email domain attached, then run `npm start` inside `notifications-worker/` with Azurite running. The timer only fires once a day, so to test it, temporarily change the schedule in `notifications-worker/src/functions/notificationsSend.ts` to run every minute. Change it back before you commit.
 
 ### Creating an account
 
-Sign-up is open — anyone who reaches the site can create their own account. There's no email or username at all; an account is just a passkey:
+1. Go to `http://localhost:4280/login`
+2. Click "New here? Create an account"
+3. Give the account an optional name. It only shows up in your passkey picker and the app header.
+4. Click "Create account with a passkey" and follow the prompt
 
-1. Visit `http://localhost:4280/login`.
-2. Click "New here? Create an account".
-3. Optionally type a name for the account (shown in your browser/password manager's passkey picker, and in the app header) — this is purely cosmetic, not an identifier.
-4. Click "Create account with a passkey"; your OS/browser will prompt for a platform authenticator (Windows Hello, Touch ID, security key, etc.).
+You're logged in right away with an empty bill list. Use "Add passkey" in the header to register more devices on the same account.
 
-That's it — you're logged in immediately, with your own private, empty bill list. Add further devices to the same account from the "Add passkey" button in the app header while logged in.
+### Checking a change by hand
 
-### Manual verification checklist
+There are no automated tests yet, so this is what I click through before calling something done:
 
-Run through this once locally before considering a change "done" (no automated test suite for this app):
-
-1. Create an account via the flow above; confirm you land on `/` with an empty bill list.
-2. Add a bill row, edit all 5 fields inline (click a cell to edit, Enter/blur to commit, Escape to cancel).
-3. Click "Mark paid" on a row, confirm the unpaid total updates.
-4. Delete a row (click Delete, then Confirm), reload the page, confirm it's gone.
-5. Log out; confirm you're redirected to `/login` and that visiting `/` again redirects back.
-6. Log back in with the same passkey (this exercises the login ceremony, not sign-up).
-7. While logged in, click "Add passkey" to register a second device on the same account.
-8. **Create a second, separate account** and confirm it sees an empty bill list, not the first account's bills — this is the core isolation guarantee, worth checking after any change touching auth or the data layer.
-9. Go to "Import CSV", upload a small sample file (include at least one blank Amount, one blank Paid Date, and one malformed date), confirm the mapping screen auto-detects columns correctly, confirm the preview screen flags the bad row as invalid, and that clicking Import updates the grid and totals.
-10. Go to "Manage Payees", rename a payee that's used by an existing bill, and confirm the bills grid shows the new name without you having touched that bill directly. Try deleting a payee that's still in use — confirm it's blocked with a clear error. Delete a payee with no bills — confirm it's removed.
+1. Create an account and confirm you land on an empty bill list
+2. Add a bill and edit every field inline (click a cell, Enter or blur saves, Escape cancels)
+3. Mark a bill paid and check that the totals update
+4. Delete a bill, reload, and confirm it's gone
+5. Log out, confirm `/` redirects to `/login`, then log back in with the passkey
+6. Register a second passkey with "Add passkey"
+7. Create a second account and confirm it can't see the first account's bills. Recheck this after any change to auth or queries.
+8. Import a small CSV with a blank amount, a blank paid date, and a malformed date, and confirm the bad row is flagged
+9. Rename a payee that has bills and confirm the grid updates. Try deleting a payee that's in use and confirm it's blocked.
 
 ## Deploying to Azure
 
-This repo does not provision or deploy anything itself — run these steps yourself when ready.
+Nothing in this repo creates Azure resources for you. These are the steps to do it yourself.
 
-### 1. Prerequisites
-- An Azure subscription
-- [`az` CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed, logged in (`az login`)
-- This code pushed to a GitHub repository
+You'll need an Azure subscription, the [`az` CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (logged in), and the code in a GitHub repo.
 
-### 2. Create the Static Web App
+### 1. Static Web App
 
-Via the Portal: **Create a resource → Static Web App → Free plan**, connect your GitHub repo/branch, and set:
+In the Portal, create a Static Web App on the Free plan, connect your repo and branch, and set:
+
 - App location: `/frontend`
 - Api location: `/api`
 - Output location: `dist`
 
-This auto-generates a GitHub Actions workflow and a repo secret that deploys on every push.
+The Portal generates a GitHub Actions workflow and a deployment token secret. Check the generated workflow, because it sometimes defaults the output location to `build`, which is wrong for Vite. It should be `dist`.
 
-Or via CLI:
+CLI version:
 
 ```bash
 az staticwebapp create \
@@ -118,7 +142,7 @@ az staticwebapp create \
   --login-with-github
 ```
 
-### 3. Create the Azure SQL Database (Always Free tier)
+### 2. SQL database
 
 ```bash
 az sql server create \
@@ -140,24 +164,27 @@ az sql db create \
   --free-limit-exhaustion-behavior AutoPause
 ```
 
-`--use-free-limit` is what makes this genuinely $0 (100K vCore-seconds + 32GB/month, one free database per subscription) — `AutoPause` means it simply pauses rather than starts billing if you ever exceed the free allowance, so there's no surprise-charge risk. The tradeoff: the database pauses after inactivity and the first request after a pause takes several seconds to resume — expected, not a bug.
+`--use-free-limit` gives you 100,000 vCore-seconds and 32GB of storage per month. With `AutoPause`, the database pauses when you run out instead of charging you. It also pauses after an hour of inactivity, so the first request after a quiet period can take a while while it wakes up.
 
-**Required firewall rule** — Azure SQL blocks all traffic by default, including from Azure's own compute:
+Anything that keeps a connection open stops the database from pausing, and that's what uses up the free budget. If you add a background job, close its connection when it finishes. This project's worker does, and it only runs once a day for the same reason.
+
+Azure SQL blocks everything by default, including Azure's own services, so add this firewall rule:
+
 ```bash
 az sql server firewall-rule create --resource-group <your-resource-group> --server <globally-unique-server-name> \
   --name AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
 ```
-(`0.0.0.0`–`0.0.0.0` is Azure SQL's special sentinel for "allow Azure-hosted resources," not a literal open-to-the-world rule.) Skipping this means the deployed app can't reach the database at all, and the error you'll see is a generic connection timeout with no obvious link back to "it's the firewall."
 
-**Apply the schema** — same script used locally, pointed at the real database:
+`0.0.0.0` to `0.0.0.0` is Azure's special value for "allow Azure services". It doesn't open the server to the internet. If you skip it, the app fails with a generic connection timeout that doesn't mention the firewall. To run the migration from your own machine, also add a rule for your IP.
+
+Apply the schema:
+
 ```bash
 SQL_SERVER=<globally-unique-server-name>.database.windows.net SQL_DATABASE=BillTracker \
 SQL_USER=<sql-login> SQL_PASSWORD="<a-strong-password>" npm run db:migrate
 ```
 
-### 4. Set application settings
-
-These become environment variables for the managed Functions API:
+### 3. App settings for the API
 
 ```bash
 az staticwebapp appsettings set --name <your-app-name> \
@@ -171,96 +198,65 @@ az staticwebapp appsettings set --name <your-app-name> \
     ORIGIN="https://<your-app-name>.azurestaticapps.net"
 ```
 
-Note `SQL_TRUST_SERVER_CERT` is deliberately **not** set here — it should only ever be `"true"` for local Docker dev (a self-signed cert); left unset, the app correctly requires Azure SQL's real, CA-trusted certificate.
+Don't set `SQL_TRUST_SERVER_CERT` in production. It's only for the self-signed cert in local Docker. `ORIGIN` must match the site's URL exactly, with no trailing slash, or passkey registration fails with a vague `internal_error`.
 
-**Important:** if you later attach a custom domain, `RP_ID` and `ORIGIN` must be updated to match it — WebAuthn ties every registered passkey to the RP ID it was created under, so changing it invalidates all existing passkeys. Decide your final domain before registering your first passkey if you can.
+If you add a custom domain later, update `RP_ID` and `ORIGIN`. Passkeys are tied to the RP ID they were created under, so changing it invalidates every existing passkey. Pick your final domain before you register anything.
 
-### 5. Deploy
+### 4. Notifications worker
 
-Push to the branch connected in step 2 — GitHub Actions builds and deploys automatically.
+This is a standalone Function App, separate from the Static Web App.
 
-### 6. Create your account
+1. Create an **Azure Communication Services** resource and an **Email Communication Service** with a domain attached (the free Azure-managed domain works), then connect the domain to the ACS resource.
+2. Create a **Function App** (Node 20). Link Application Insights or you won't be able to see any logs.
+3. Under Configuration, turn on **SCM Basic Auth Publishing Credentials**, or the GitHub Action can't deploy.
+4. Add these app settings:
 
-Visit `https://<your-app-name>.azurestaticapps.net/login` and use "New here? Create an account" — no token, invite, or credential needed, sign-up is open to anyone who reaches the URL. This also means anyone else who finds the URL can create their own (separate, isolated) account — that's expected given the open-signup design (see "Security notes" below).
+   ```
+   SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD   same values as the API
+   ORIGIN                                             the site URL, no trailing slash
+   ACS_CONNECTION_STRING                              from the ACS resource's Keys page
+   NOTIFICATION_SENDER_EMAIL                          DoNotReply@<your-domain>.azurecomm.net
+   WEBSITE_RUN_FROM_PACKAGE                           1
+   ```
 
-### 7. Add more devices
+   `WEBSITE_RUN_FROM_PACKAGE=1` matters. Without it the deploy copies thousands of `node_modules` files one by one and times out with a 500.
 
-While logged in, use "Add passkey" in the app header to register another device on the same account.
+5. Download the Function App's publish profile and save it as a GitHub secret. The workflows in `.github/workflows/` expect `AZURE_FUNCTIONAPP_PUBLISH_PROFILE_NOTIFICATIONS_STAGING` and `AZURE_FUNCTIONAPP_PUBLISH_PROFILE_NOTIFICATIONS_PROD`. Download a fresh profile after enabling SCM basic auth, since an older one won't work. Also update `app-name` in each workflow to your Function App's name.
 
-### 8. Rotating the session secret
+The timer runs once a day at 13:00 UTC. That's 9am Atlantic Standard Time, and it's deliberately set to the winter offset so it never fires before 9am local. Each user's local time is checked on every run, so it still works for other timezones, just a few hours off. See the comments in `notificationsSend.ts` for the reasoning.
 
-Rotating `SESSION_SECRET` invalidates all active sessions (forces re-login everywhere) but does **not** affect registered passkeys. Safe to do anytime, e.g. if you suspect it's been exposed:
+### 5. Deploy and sign up
+
+Push to the connected branch and GitHub Actions builds and deploys. Then open `https://<your-app-name>.azurestaticapps.net/login` and create an account. Anyone who finds the URL can do the same.
+
+### Rotating the session secret
+
+Rotating `SESSION_SECRET` logs everyone out but doesn't affect passkeys:
 
 ```bash
 az staticwebapp appsettings set --name <your-app-name> --setting-names SESSION_SECRET="$(openssl rand -base64 32)"
 ```
 
-### Expected cost
+### Cost
 
-Static Web Apps Free tier: $0 (includes 100GB/month bandwidth + managed functions). Azure SQL Database on the free-limit serverless tier: $0, as long as usage stays under 100K vCore-seconds + 32GB/month — extremely unlikely to exceed at personal-app scale, and `AutoPause` means it pauses rather than bills if you ever did. Total: genuinely $0/month, not just cheap.
+The Static Web Apps free tier is $0. The SQL free tier is $0 as long as you stay under the monthly allowance, and if you go over it pauses until next month, so you won't get a bill. Azure Communication Services is pay per email, and at the volume of a personal app it rounds to almost nothing. Check the Cost Analysis page in the Portal after the first week to be sure.
 
-### Security notes
+## Staging
 
-- **Sign-up is open and unauthenticated** — anyone with the URL can create an account. There's no email verification or invite gate. This is a deliberate tradeoff: each account's data is fully isolated (see below), so open sign-up's realistic exposure is nuisance accounts/storage cost, not one account reading another's data.
-- **Data isolation is enforced by every query, not just Table Storage's addressing model anymore**: bills and payees are stored in Azure SQL with every row scoped to an account id, and every query includes `WHERE user_id = @userId` sourced only from the signed session — never from a request body/param. A request for another account's bill id simply matches zero rows (a clean 404) rather than ever returning data. This is disciplined application code enforcing the boundary (via a consistent, audited pattern across every query), not a storage-engine-level guarantee the way Table Storage's partition addressing was — worth knowing if you ever add a new query against these tables.
-- **No rate limiting** on account creation. Deferred deliberately — each sign-up requires a real WebAuthn ceremony (a physical authenticator), which already blocks naive scripted mass-account creation. Add rate limiting later if it ever becomes a real problem.
-- **Accounts have no recovery mechanism.** Since there's no email, losing access to every registered passkey for an account means losing access to that account's data permanently — there's no password reset or account recovery flow. Registering a passkey on more than one device ("Add passkey") is the only mitigation.
-- **The free tier auto-pauses on inactivity** — the first request after a pause can take several seconds to resume. Expected behavior, not a bug; not worth engineering around with a keep-alive ping (that would just burn the free vCore-second allowance for no real benefit).
+I run staging as a completely separate Static Web App tied to a `staging` branch, with its own database, its own notifications Function App, and its own secrets. I don't use Static Web Apps' built-in preview environments, because those share app settings with production.
 
-## Staging environment
+To set it up, repeat the deploy steps above with a second Static Web App on the `staging` branch and a second database (`BillTrackerStaging`), with a fresh `SESSION_SECRET`. Keep `main` and `staging` as separate branches. Test on `staging` first, then bring changes over to `main`.
 
-For testing changes (schema migrations, new features) without touching production data, run staging as a **second, fully separate Static Web App** connected to a `staging` branch — not SWA's built-in PR/branch preview environments, which share app settings with production and are ephemeral. The two deployments never share config or data.
+Passkeys don't carry over between environments, since each one has its own RP ID. You'll make separate test accounts on staging, which is usually what you want anyway.
 
-### 1. Create a second Static Web App
+## Security notes
 
-Portal: **Create a resource → Static Web App → Free plan**, connect the same GitHub repo, branch = `staging`, same locations as prod (App `/frontend`, Api `/api`, Output `dist`). This auto-generates a second GitHub Actions workflow file and a second repo secret, the same way the existing prod workflow was created — pushes to `staging` now deploy independently from pushes to `main`.
+- **Sign-up is open.** There's no email verification and no invite. Each account's data is isolated, so the realistic downside is junk accounts using up your free database budget, not one account reading another's.
+- **Isolation is enforced in the queries.** Every query filters on `user_id`, taken from the signed session and never from the request. Asking for another account's bill just returns nothing. This is a convention in the code, not something the database enforces, so keep it up when you add new queries.
+- **There is no rate limiting** on sign-up or anything else. Each sign-up needs a real WebAuthn ceremony, which slows down scripts, but it isn't a real defense. If you make a deployment public, add rate limiting first.
+- **There's no account recovery.** With no email on the account, losing every registered passkey means losing the account. Add a second device with "Add passkey" as a backup.
+- **The database auto-pauses**, so the first request after a while is slow. I don't use a keep-alive ping, because that would burn through the free allowance for no benefit.
 
-### 2. Create a second database
+## Moving over from a spreadsheet
 
-Reuse the existing SQL logical server (same admin login, same `AllowAzureServices` firewall rule already covers it) rather than standing up a second server:
-
-```bash
-az sql db create \
-  --resource-group <your-resource-group> \
-  --server <your-existing-sql-server> \
-  --name BillTrackerStaging \
-  --edition GeneralPurpose \
-  --family Gen5 \
-  --capacity 2 \
-  --compute-model Serverless
-```
-
-Note there's no `--use-free-limit` here — Azure only grants the Always-Free allowance to one database per subscription, and the prod database already claims it. A second database is a small real cost (roughly a few dollars a month at low usage), so total spend is no longer strictly $0 once staging exists.
-
-Apply the schema the same way as prod, pointed at the new database:
-
-```bash
-SQL_SERVER=<your-existing-sql-server>.database.windows.net SQL_DATABASE=BillTrackerStaging \
-SQL_USER=<sql-login> SQL_PASSWORD="<same-password-as-prod>" npm run db:migrate
-```
-
-### 3. Set application settings on the staging resource
-
-```bash
-az staticwebapp appsettings set --name <your-staging-app-name> \
-  --setting-names \
-    SQL_SERVER="<your-existing-sql-server>.database.windows.net" \
-    SQL_DATABASE="BillTrackerStaging" \
-    SQL_USER="<sql-login>" \
-    SQL_PASSWORD="<same-password-as-prod>" \
-    SESSION_SECRET="$(openssl rand -base64 32)" \
-    RP_ID="<your-staging-app-name>.azurestaticapps.net" \
-    ORIGIN="https://<your-staging-app-name>.azurestaticapps.net"
-```
-
-`SESSION_SECRET` should be a fresh value, independent from prod's.
-
-**Passkeys don't carry over between environments.** WebAuthn ties every registered passkey to the `RP_ID` it was created under, and staging's `RP_ID` is necessarily different from prod's — so staging gets its own, separate accounts. This is actually what you want (a safe sandbox with test data, isolated from real accounts), just worth knowing going in: signing up on staging doesn't give you access on prod or vice versa.
-
-### 4. Deploy and verify
-
-Push to `staging` to trigger the new workflow. Visit the staging URL, create a test account, and confirm bills you add there land in `BillTrackerStaging`, not the production database.
-
-## Migrating your existing spreadsheet
-
-Export your Dropbox spreadsheet to CSV, then use the "Import CSV" screen in the app. It expects (and will try to auto-detect) columns for Payee, Amount, Due Date, Paid Date, and Notes — you can remap them manually if your headers differ. The preview screen (paginated at 100 rows, so it stays responsive even on large files) flags rows with unparseable dates or amounts; they're skipped rather than blocking the whole import.
+Export your spreadsheet to CSV and use "Import CSV" in the app. It looks for Payee, Amount, Due Date, Paid Date, Payment Method, and Notes columns and guesses the mapping, which you can change if your headers are different. Rows with dates or amounts it can't parse are flagged in the preview and skipped, and they don't block the rest of the import.
