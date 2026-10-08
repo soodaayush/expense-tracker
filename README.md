@@ -1,8 +1,8 @@
+# Bill Tracker
+
 <p align="center">
   <img src="docs/screenshot.png" alt="Bill Tracker screenshot" width="900">
 </p>
-
-# Bill Tracker
 
 A bill tracker I built to replace the spreadsheet I was using to keep track of what I owe and when. It has an editable grid that feels like a spreadsheet, CSV import and export, reports, email reminders, and passkey-only accounts, so there are no passwords and no emails to sign up. It runs on Azure and is designed to cost close to nothing.
 
