@@ -25,5 +25,8 @@
     "azure-functions-core-tools": "^4.0.6821",
     "rimraf": "^6.0.1",
     "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "@azure/msal-node": "^7.1.1"
   }
 }
